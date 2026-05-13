@@ -1,6 +1,3 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
-import { createServiceClient } from '@/lib/supabase/service'
 import type { TierSlug } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
 
@@ -9,78 +6,24 @@ export const dynamic = 'force-dynamic'
 const C = BRAND.colors
 const F = BRAND.fonts
 
-async function getPortalData(clerkUserId: string) {
-  const supabase = createServiceClient()
-
-  const [walletRes, sessionsRes, savedRes] = await Promise.all([
-    supabase
-      .from('picks_wallets')
-      .select('tier_slug, subscription_status, billing_cycle, stripe_customer_id, created_at')
-      .eq('clerk_user_id', clerkUserId)
-      .eq('brand_id', '247cashpicks')
-      .single(),
-
-    supabase
-      .from('picks_tool_sessions')
-      .select('tool_used, created_at')
-      .eq('clerk_user_id', clerkUserId)
-      .eq('brand_id', '247cashpicks')
-      .gte('created_at', new Date(new Date().setDate(1)).toISOString()),
-
-    supabase
-      .from('picks_custom_inputs')
-      .select('id, player_name, game_date, save_name, output_proj_pts, output_proj_reb, output_proj_ast, created_at')
-      .eq('clerk_user_id', clerkUserId)
-      .eq('brand_id', '247cashpicks')
-      .eq('is_saved', true)
-      .order('created_at', { ascending: false })
-      .limit(5),
-  ])
-
-  return {
-    wallet: walletRes.data,
-    sessions: sessionsRes.data || [],
-    saved: savedRes.data || [],
-  }
-}
-
 export default async function PortalPage() {
-  const { userId } = await auth()
-  if (!userId) redirect('/join?redirect=/portal')
+  const userId = 'preview-user'
+  void userId
 
-  const { wallet, sessions, saved } = await getPortalData(userId)
-
-  if (!wallet || wallet.subscription_status !== 'active') {
-    return (
-      <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
-        <div style={{
-          maxWidth: '560px', margin: '0 auto',
-          padding: '80px 40px', textAlign: 'center',
-        }}>
-          <div style={{ fontSize: '56px', marginBottom: '24px' }}>👤</div>
-          <h1 style={{
-            fontFamily: F.heading, fontSize: '40px', fontWeight: 900,
-            margin: '0 0 16px', lineHeight: 1,
-          }}>
-            NO ACTIVE<br />
-            <span style={{ color: C.accentLight }}>MEMBERSHIP</span>
-          </h1>
-          <p style={{ color: C.textMuted, fontSize: '16px', lineHeight: 1.6, margin: '0 0 32px' }}>
-            Join DataNexus to access your subscriber portal,
-            daily signals, and analytical tools.
-          </p>
-          <a href="/join" style={{
-            display: 'inline-block', background: C.accent, color: C.text,
-            padding: '16px 40px', borderRadius: '10px', fontFamily: F.heading,
-            fontWeight: 800, fontSize: '18px', letterSpacing: '0.5px',
-            textDecoration: 'none',
-          }}>
-            JOIN NOW →
-          </a>
-        </div>
-      </div>
-    )
+  const wallet = {
+    tier_slug: 'vector' as TierSlug,
+    subscription_status: 'active',
+    billing_cycle: 'monthly',
+    stripe_customer_id: null as string | null,
+    created_at: '2025-01-01T00:00:00Z',
   }
+  const sessions: Array<{ tool_used: string; created_at: string }> = []
+  const saved: Array<{
+    id: string; player_name: string | null; game_date: string
+    save_name: string | null; output_proj_pts: number | null
+    output_proj_reb: number | null; output_proj_ast: number | null
+    created_at: string
+  }> = []
 
   const tier = wallet.tier_slug as TierSlug
   const tierConfig = BRAND.tiers.find(t => t.slug === tier)

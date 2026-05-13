@@ -1,24 +1,10 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
-import { canAccess, canUseTool } from '@/lib/picks/tiers'
+import { canUseTool } from '@/lib/picks/tiers'
 import type { TierSlug, ToolKey } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
 
 const C = BRAND.colors
 const F = BRAND.fonts
-
-async function getSubscriberTier(clerkUserId: string): Promise<TierSlug | null> {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from('picks_wallets')
-    .select('tier_slug, subscription_status')
-    .eq('clerk_user_id', clerkUserId)
-    .eq('brand_id', '247cashpicks')
-    .single()
-  if (!data || data.subscription_status !== 'active') return null
-  return data.tier_slug as TierSlug
-}
 
 async function getToolUsage(clerkUserId: string) {
   const supabase = createServiceClient()
@@ -125,42 +111,8 @@ function toolBorderRgb(color: string): string {
 }
 
 export default async function ToolsPage() {
-  const { userId } = await auth()
-  if (!userId) redirect('/join?redirect=/tools')
-
-  const tier = await getSubscriberTier(userId)
-
-  if (!tier || !canAccess(tier, 'analyst')) {
-    return (
-      <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
-        <div style={{
-          maxWidth: '600px', margin: '0 auto', padding: '80px 40px',
-          textAlign: 'center',
-        }}>
-          <div style={{ fontSize: '64px', marginBottom: '24px' }}>⚡</div>
-          <h1 style={{
-            fontFamily: F.heading, fontSize: '48px', fontWeight: 900,
-            margin: '0 0 16px', lineHeight: 1,
-          }}>
-            LAB ACCESS REQUIRES<br />
-            <span style={{ color: C.accentLight }}>ANALYST TIER</span>
-          </h1>
-          <p style={{ color: C.textMuted, fontSize: '16px', lineHeight: 1.6, margin: '0 0 32px' }}>
-            The analytical tools are available from Analyst ($549/mo) and above.
-            Upgrade to run the model yourself.
-          </p>
-          <a href="/join?tier=analyst" style={{
-            display: 'inline-block', background: C.accent, color: C.text,
-            padding: '16px 40px', borderRadius: '10px', fontFamily: F.heading,
-            fontWeight: 800, fontSize: '18px', letterSpacing: '0.5px',
-            textDecoration: 'none',
-          }}>
-            UPGRADE TO ANALYST — $549/mo
-          </a>
-        </div>
-      </div>
-    )
-  }
+  const userId = 'preview-user'
+  const tier = 'vector' as TierSlug
 
   const usage = await getToolUsage(userId)
   const usageCounts: Record<string, number> = {}

@@ -1,24 +1,9 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
-import { canAccess } from '@/lib/picks/tiers'
 import type { TierSlug, PickPublished } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
 
 const C = BRAND.colors
 const F = BRAND.fonts
-
-async function getSubscriberTier(clerkUserId: string): Promise<TierSlug | null> {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from('picks_wallets')
-    .select('tier_slug, subscription_status')
-    .eq('clerk_user_id', clerkUserId)
-    .eq('brand_id', '247cashpicks')
-    .single()
-  if (!data || data.subscription_status !== 'active') return null
-  return data.tier_slug as TierSlug
-}
 
 async function getTodaysPicks(): Promise<PickPublished[]> {
   const supabase = createServiceClient()
@@ -175,24 +160,8 @@ function PickCard({ pick, locked }: { pick: PickPublished; locked?: boolean }) {
 }
 
 export default async function PicksPage() {
-  const { userId } = await auth()
-  if (!userId) redirect('/join?redirect=/picks')
-
-  const tier = await getSubscriberTier(userId)
-
-  if (!tier) {
-    return (
-      <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
-        <UpgradeWall
-          message="You need an active membership to access daily signals. Start with Core at $199/month."
-          tier="core"
-          price="$199"
-        />
-      </div>
-    )
-  }
-
-  void canAccess
+  const userId = 'preview-user'
+  const tier = 'vector' as TierSlug
 
   const picks = await getTodaysPicks()
   const today = new Date().toLocaleDateString('en-US', {

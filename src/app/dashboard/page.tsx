@@ -1,5 +1,3 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 
@@ -54,11 +52,8 @@ const AGENTS = [
 ]
 
 export default async function DashboardPage() {
-  const { userId, sessionClaims } = await auth()
-  if (!userId) redirect('/join')
-
-  const role = (sessionClaims?.metadata as { role?: string })?.role
-  if (role !== 'operator') redirect('/picks')
+  const userId = 'preview-user'
+  void userId
 
   const { projections, selections, lines } = await getDashboardData()
   const today = new Date().toLocaleDateString('en-US', {
