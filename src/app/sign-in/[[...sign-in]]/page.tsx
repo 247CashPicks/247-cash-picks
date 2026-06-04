@@ -1,5 +1,3 @@
-import { SignIn } from '@clerk/nextjs'
-
 export default function SignInPage() {
   return (
     <div
@@ -25,13 +23,21 @@ export default function SignInPage() {
           <span style={{ color: '#A78BFA' }}>Data</span>
           <span style={{ color: '#F1F0FF' }}>Nexus</span>
         </div>
-        <SignIn
-          appearance={{
-            elements: {
-              rootBox: { width: '100%' },
-            },
+        <p style={{ color: '#94A3B8', fontSize: '16px' }}>
+          Authentication disabled for preview.
+        </p>
+        <a
+          href="/"
+          style={{
+            display: 'inline-block',
+            marginTop: '24px',
+            color: '#A78BFA',
+            textDecoration: 'none',
+            fontSize: '15px',
           }}
-        />
+        >
+          ← Back to home
+        </a>
       </div>
     </div>
   )

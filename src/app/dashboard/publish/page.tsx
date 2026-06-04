@@ -1,5 +1,3 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 
@@ -22,12 +20,6 @@ async function getConfirmedPicks() {
 }
 
 export default async function PublishPage() {
-  const { userId, sessionClaims } = await auth()
-  if (!userId) redirect('/join')
-
-  const role = (sessionClaims?.metadata as { role?: string })?.role
-  if (role !== 'operator') redirect('/picks')
-
   const picks = await getConfirmedPicks()
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',

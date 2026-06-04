@@ -1,37 +1,14 @@
-import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { runProjection } from '@/lib/picks/model'
-import { canUseTool } from '@/lib/picks/tiers'
 import type { TierSlug, ProjectionInputs } from '@/lib/picks/types'
 
 const BRAND_ID = '247cashpicks'
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+  const userId = 'preview-user'
+  const tier = 'vector' as TierSlug
   const supabase = createServiceClient()
-  const { data: wallet } = await supabase
-    .from('picks_wallets')
-    .select('tier_slug, subscription_status')
-    .eq('clerk_user_id', userId)
-    .eq('brand_id', BRAND_ID)
-    .single()
-
-  if (!wallet || wallet.subscription_status !== 'active') {
-    return NextResponse.json({ error: 'No active subscription' }, { status: 403 })
-  }
-
-  const tier = wallet.tier_slug as TierSlug
-  if (!canUseTool(tier, 'projection_runner')) {
-    return NextResponse.json({
-      error: 'Projection Runner requires Analyst tier or above',
-      requiredTier: 'analyst',
-    }, { status: 403 })
-  }
 
   const body = await req.json()
   const {

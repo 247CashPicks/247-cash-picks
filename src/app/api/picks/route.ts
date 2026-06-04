@@ -1,4 +1,3 @@
-import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { canAccess } from '@/lib/picks/tiers'
@@ -6,30 +5,10 @@ import type { TierSlug } from '@/lib/picks/types'
 
 const BRAND_ID = '247cashpicks'
 
-async function getSubscriberTier(clerkUserId: string): Promise<TierSlug | null> {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from('picks_wallets')
-    .select('tier_slug, subscription_status')
-    .eq('clerk_user_id', clerkUserId)
-    .eq('brand_id', BRAND_ID)
-    .single()
-  if (!data || data.subscription_status !== 'active') return null
-  return data.tier_slug as TierSlug
-}
-
 // GET /api/picks?date=2026-05-12
 // Returns published picks for the date, filtered to subscriber tier
 export async function GET(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const tier = await getSubscriberTier(userId)
-  if (!tier) {
-    return NextResponse.json({ error: 'No active subscription' }, { status: 403 })
-  }
+  const tier = 'vector' as TierSlug
 
   const date = req.nextUrl.searchParams.get('date')
     || new Date().toISOString().split('T')[0]
@@ -58,16 +37,6 @@ export async function GET(req: NextRequest) {
 
 // POST /api/picks — operator actions (add to selections, publish all)
 export async function POST(req: NextRequest) {
-  const { userId, sessionClaims } = await auth()
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const role = (sessionClaims?.metadata as { role?: string })?.role
-  if (role !== 'operator') {
-    return NextResponse.json({ error: 'Operator only' }, { status: 403 })
-  }
-
   const body = await req.formData().catch(() => null)
   const jsonBody = body ? null : await req.json().catch(() => null)
 

@@ -1,36 +1,15 @@
-import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { canUseTool } from '@/lib/picks/tiers'
 import type { TierSlug } from '@/lib/picks/types'
 
 const BRAND_ID = '247cashpicks'
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const userId = 'preview-user'
+  const tier = 'vector' as TierSlug
+  void tier
 
   const supabase = createServiceClient()
-  const { data: wallet } = await supabase
-    .from('picks_wallets')
-    .select('tier_slug, subscription_status')
-    .eq('clerk_user_id', userId)
-    .eq('brand_id', BRAND_ID)
-    .single()
-
-  if (!wallet || wallet.subscription_status !== 'active') {
-    return NextResponse.json({ error: 'No active subscription' }, { status: 403 })
-  }
-
-  const tier = wallet.tier_slug as TierSlug
-  if (!canUseTool(tier, 'backtester')) {
-    return NextResponse.json({
-      error: 'Backtester requires Elite tier',
-      requiredTier: 'elite',
-    }, { status: 403 })
-  }
 
   const { dateFrom, dateTo, statFilter, confFilter } = await req.json()
 

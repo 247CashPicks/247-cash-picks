@@ -2,6 +2,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import type { TierSlug, PickPublished } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
 
+export const dynamic = 'force-dynamic'
+
 const C = BRAND.colors
 const F = BRAND.fonts
 
