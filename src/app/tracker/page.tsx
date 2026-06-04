@@ -11,7 +11,7 @@ async function getWinRateStats() {
   const { data } = await supabase
     .from('picks_published')
     .select('result, stat_type, confidence, game_date')
-    .eq('brand_id', '247cashpicks')
+    .eq('brand_id', BRAND.slug)
     .neq('result', 'pending')
     .neq('result', 'void')
     .order('game_date', { ascending: false })
@@ -23,7 +23,7 @@ async function getRecentResults() {
   const { data } = await supabase
     .from('picks_published')
     .select('player_name, team, stat_type, line, direction, result, actual_value, game_date, our_projection, confidence')
-    .eq('brand_id', '247cashpicks')
+    .eq('brand_id', BRAND.slug)
     .order('game_date', { ascending: false })
     .limit(50)
   return data || []

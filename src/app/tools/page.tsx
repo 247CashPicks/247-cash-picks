@@ -1,4 +1,7 @@
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getWalletForUser } from '@/lib/auth/session'
 import { canUseTool } from '@/lib/picks/tiers'
 import type { TierSlug, ToolKey } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
@@ -17,7 +20,7 @@ async function getToolUsage(clerkUserId: string) {
     .from('picks_tool_sessions')
     .select('tool_used')
     .eq('clerk_user_id', clerkUserId)
-    .eq('brand_id', '247cashpicks')
+    .eq('brand_id', BRAND.slug)
     .gte('created_at', startOfMonth.toISOString())
   return data || []
 }
@@ -113,8 +116,11 @@ function toolBorderRgb(color: string): string {
 }
 
 export default async function ToolsPage() {
-  const userId = 'preview-user'
-  const tier = 'vector' as TierSlug
+  const { userId } = await auth()
+  if (!userId) redirect('/sign-in')
+
+  const wallet = await getWalletForUser(userId)
+  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
   const usage = await getToolUsage(userId)
   const usageCounts: Record<string, number> = {}

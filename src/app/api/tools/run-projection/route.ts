@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getWalletForUser } from '@/lib/auth/session'
 import { runProjection } from '@/lib/picks/model'
+import { BRAND } from '@/config/brand'
 import type { TierSlug, ProjectionInputs } from '@/lib/picks/types'
 
-const BRAND_ID = '247cashpicks'
-
 export async function POST(req: NextRequest) {
-  const userId = 'preview-user'
-  const tier = 'vector' as TierSlug
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const wallet = await getWalletForUser(userId)
+  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
+
   const supabase = createServiceClient()
 
   const body = await req.json()
@@ -54,7 +61,7 @@ export async function POST(req: NextRequest) {
   const { data: session } = await supabase
     .from('picks_tool_sessions')
     .insert({
-      brand_id: BRAND_ID,
+      brand_id: BRAND.slug,
       clerk_user_id: userId,
       tier_slug: tier,
       tool_used: 'projection_runner',
@@ -78,7 +85,7 @@ export async function POST(req: NextRequest) {
 
   if (sessionId) {
     await supabase.from('picks_custom_inputs').insert({
-      brand_id: BRAND_ID,
+      brand_id: BRAND.slug,
       clerk_user_id: userId,
       session_id: sessionId,
       game_date: today,
@@ -123,7 +130,7 @@ export async function POST(req: NextRequest) {
   const { data: lines } = await supabase
     .from('picks_lines')
     .select('stat_type, line, platform')
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .eq('player_name', playerName || '')
     .eq('game_date', today)
 

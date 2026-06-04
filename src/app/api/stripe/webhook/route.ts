@@ -3,8 +3,6 @@ import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 
-const BRAND_ID = '247cashpicks'
-
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2026-04-22.dahlia',
@@ -65,7 +63,7 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('clerk_user_id', clerkUserId)
-        .eq('brand_id', BRAND_ID)
+        .eq('brand_id', BRAND.slug)
       break
     }
 
@@ -83,7 +81,7 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('stripe_subscription_id', subscriptionId)
-        .eq('brand_id', BRAND_ID)
+        .eq('brand_id', BRAND.slug)
       break
     }
 
@@ -102,7 +100,7 @@ export async function POST(req: NextRequest) {
         .from('picks_wallets')
         .update(updates)
         .eq('stripe_subscription_id', sub.id)
-        .eq('brand_id', BRAND_ID)
+        .eq('brand_id', BRAND.slug)
       break
     }
 
@@ -116,7 +114,7 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('stripe_subscription_id', sub.id)
-        .eq('brand_id', BRAND_ID)
+        .eq('brand_id', BRAND.slug)
       break
     }
 

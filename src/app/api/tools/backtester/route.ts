@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getWalletForUser } from '@/lib/auth/session'
+import { BRAND } from '@/config/brand'
 import type { TierSlug } from '@/lib/picks/types'
 
-const BRAND_ID = '247cashpicks'
-
 export async function POST(req: NextRequest) {
-  const userId = 'preview-user'
-  const tier = 'vector' as TierSlug
-  void tier
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const wallet = await getWalletForUser(userId)
+  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
   const supabase = createServiceClient()
 
@@ -16,7 +21,7 @@ export async function POST(req: NextRequest) {
   let query = supabase
     .from('picks_published')
     .select('player_name, stat_type, line, direction, our_projection, result, actual_value, confidence, game_date')
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .neq('result', 'pending')
     .neq('result', 'void')
 
@@ -97,7 +102,7 @@ export async function POST(req: NextRequest) {
     .sort((a, b) => b.rate - a.rate)
 
   await supabase.from('picks_tool_sessions').insert({
-    brand_id: BRAND_ID,
+    brand_id: BRAND.slug,
     clerk_user_id: userId,
     tier_slug: tier,
     tool_used: 'backtester',

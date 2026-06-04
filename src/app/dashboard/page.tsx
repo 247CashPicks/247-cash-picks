@@ -1,3 +1,5 @@
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 
@@ -14,14 +16,14 @@ async function getDashboardData() {
     supabase
       .from('picks_projections')
       .select('*')
-      .eq('brand_id', '247cashpicks')
+      .eq('brand_id', BRAND.slug)
       .eq('game_date', today)
       .order('confidence_score', { ascending: false }),
 
     supabase
       .from('picks_selections')
       .select('*')
-      .eq('brand_id', '247cashpicks')
+      .eq('brand_id', BRAND.slug)
       .eq('game_date', today)
       .in('status', ['pending', 'confirmed'])
       .order('display_order', { ascending: true }),
@@ -29,7 +31,7 @@ async function getDashboardData() {
     supabase
       .from('picks_lines')
       .select('player_name, stat_type, line, platform, edge_pct, recommended_side')
-      .eq('brand_id', '247cashpicks')
+      .eq('brand_id', BRAND.slug)
       .eq('game_date', today)
       .order('edge_pct', { ascending: false }),
   ])
@@ -52,8 +54,8 @@ const AGENTS = [
 ]
 
 export default async function DashboardPage() {
-  const userId = 'preview-user'
-  void userId
+  const { userId } = await auth()
+  if (!userId) redirect('/sign-in')
 
   const { projections, selections, lines } = await getDashboardData()
   const today = new Date().toLocaleDateString('en-US', {

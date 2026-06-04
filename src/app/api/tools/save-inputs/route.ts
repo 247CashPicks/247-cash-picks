@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase/service'
-
-const BRAND_ID = '247cashpicks'
+import { BRAND } from '@/config/brand'
 
 export async function POST(req: NextRequest) {
-  const userId = 'preview-user'
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const { sessionId, saveName } = await req.json()
 
@@ -18,7 +21,7 @@ export async function POST(req: NextRequest) {
     .from('picks_tool_sessions')
     .select('id, clerk_user_id')
     .eq('id', sessionId)
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .single()
 
   if (!session || session.clerk_user_id !== userId) {

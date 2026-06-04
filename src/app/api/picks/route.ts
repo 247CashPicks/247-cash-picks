@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
+import { BRAND } from '@/config/brand'
 import type { TierSlug } from '@/lib/picks/types'
-
-const BRAND_ID = '247cashpicks'
 
 // GET /api/picks?date=2026-05-12
 // Returns published picks for the date, filtered to subscriber tier
 export async function GET(req: NextRequest) {
-  const tier = 'vector' as TierSlug
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const wallet = await getWalletForUser(userId)
+  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
   const date = req.nextUrl.searchParams.get('date')
     || new Date().toISOString().split('T')[0]
@@ -17,7 +24,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from('picks_published')
     .select('*')
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .eq('game_date', date)
     .order('display_order', { ascending: true })
 
@@ -49,7 +56,7 @@ export async function POST(req: NextRequest) {
     const { data: confirmed } = await supabase
       .from('picks_selections')
       .select('*')
-      .eq('brand_id', BRAND_ID)
+      .eq('brand_id', BRAND.slug)
       .eq('game_date', today)
       .eq('status', 'confirmed')
 
@@ -58,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const publishedRows = confirmed.map((s) => ({
-      brand_id: BRAND_ID,
+      brand_id: BRAND.slug,
       selection_id: s.id,
       game_date: s.game_date,
       game_id: s.game_id,
@@ -87,7 +94,7 @@ export async function POST(req: NextRequest) {
     await supabase
       .from('picks_selections')
       .update({ status: 'published', published_at: new Date().toISOString() })
-      .eq('brand_id', BRAND_ID)
+      .eq('brand_id', BRAND.slug)
       .eq('game_date', today)
       .eq('status', 'confirmed')
 
@@ -100,9 +107,10 @@ export async function POST(req: NextRequest) {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+            'X-Brand-Id': BRAND.slug,
           },
           body: JSON.stringify({
-            brand_id: BRAND_ID,
+            brand_id: BRAND.slug,
             game_date: today,
             pick_count: confirmed.length,
           }),
@@ -131,7 +139,7 @@ export async function POST(req: NextRequest) {
     .from('picks_projections')
     .select('*')
     .eq('id', projectionId)
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .single()
 
   if (!proj) {
@@ -141,7 +149,7 @@ export async function POST(req: NextRequest) {
   const { data: line } = await supabase
     .from('picks_lines')
     .select('*')
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .eq('player_name', playerName)
     .eq('game_date', today)
     .order('edge_pct', { ascending: false })
@@ -151,7 +159,7 @@ export async function POST(req: NextRequest) {
   const { error: selError } = await supabase
     .from('picks_selections')
     .insert({
-      brand_id: BRAND_ID,
+      brand_id: BRAND.slug,
       game_date: today,
       game_id: proj.game_id,
       player_name: proj.player_name,
@@ -163,7 +171,7 @@ export async function POST(req: NextRequest) {
       edge_pct: line?.edge_pct || null,
       confidence: proj.confidence_score >= 80 ? 'high'
         : proj.confidence_score >= 60 ? 'medium' : 'low',
-      tier_required: 'rookie',
+      tier_required: 'core',
       platform: line?.platform || 'prizepicks',
       status: 'pending',
       display_order: 0,

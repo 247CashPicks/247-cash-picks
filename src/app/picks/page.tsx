@@ -1,4 +1,7 @@
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getWalletForUser } from '@/lib/auth/session'
 import type { TierSlug, PickPublished } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
 
@@ -13,7 +16,7 @@ async function getTodaysPicks(): Promise<PickPublished[]> {
   const { data } = await supabase
     .from('picks_published')
     .select('*')
-    .eq('brand_id', '247cashpicks')
+    .eq('brand_id', BRAND.slug)
     .eq('game_date', today)
     .eq('status', 'published')
     .order('display_order', { ascending: true })
@@ -162,8 +165,11 @@ function PickCard({ pick, locked }: { pick: PickPublished; locked?: boolean }) {
 }
 
 export default async function PicksPage() {
-  const userId = 'preview-user'
-  const tier = 'vector' as TierSlug
+  const { userId } = await auth()
+  if (!userId) redirect('/sign-in')
+
+  const wallet = await getWalletForUser(userId)
+  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
   const picks = await getTodaysPicks()
   const today = new Date().toLocaleDateString('en-US', {

@@ -12,7 +12,7 @@ async function getConfirmedPicks() {
   const { data } = await supabase
     .from('picks_selections')
     .select('*')
-    .eq('brand_id', '247cashpicks')
+    .eq('brand_id', BRAND.slug)
     .eq('game_date', today)
     .eq('status', 'confirmed')
     .order('display_order', { ascending: true })

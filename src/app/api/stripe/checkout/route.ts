@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 
-const BRAND_ID = '247cashpicks'
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.247cashpicks.live'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.TheAnalyticsCommunity.com'
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -13,7 +13,10 @@ function getStripe() {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = 'preview-user'
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const { tierSlug, promoCode } = await req.json()
 
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
     .from('picks_wallets')
     .select('stripe_customer_id, subscription_status, tier_slug')
     .eq('clerk_user_id', userId)
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .single()
 
   if (
@@ -65,7 +68,7 @@ export async function POST(req: NextRequest) {
       name: [member.first_name, member.last_name].filter(Boolean).join(' ') || undefined,
       metadata: {
         clerk_user_id: userId,
-        brand_id: BRAND_ID,
+        brand_id: BRAND.slug,
       },
     })
     stripeCustomerId = customer.id
@@ -74,7 +77,7 @@ export async function POST(req: NextRequest) {
       .from('picks_wallets')
       .update({ stripe_customer_id: stripeCustomerId })
       .eq('clerk_user_id', userId)
-      .eq('brand_id', BRAND_ID)
+      .eq('brand_id', BRAND.slug)
   }
 
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -85,14 +88,14 @@ export async function POST(req: NextRequest) {
     cancel_url: `${SITE_URL}/join?tier=${tierSlug}&cancelled=true`,
     metadata: {
       clerk_user_id: userId,
-      brand_id: BRAND_ID,
+      brand_id: BRAND.slug,
       tier_slug: tierSlug,
       price_id: tier.stripePriceId,
     },
     subscription_data: {
       metadata: {
         clerk_user_id: userId,
-        brand_id: BRAND_ID,
+        brand_id: BRAND.slug,
         tier_slug: tierSlug,
       },
     },

@@ -1,3 +1,7 @@
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+import { createServiceClient } from '@/lib/supabase/service'
+import { getWalletForUser } from '@/lib/auth/session'
 import type { TierSlug } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
 
@@ -7,25 +11,39 @@ const C = BRAND.colors
 const F = BRAND.fonts
 
 export default async function PortalPage() {
-  const userId = 'preview-user'
-  void userId
+  const { userId } = await auth()
+  if (!userId) redirect('/sign-in')
 
-  const wallet = {
-    tier_slug: 'vector' as TierSlug,
-    subscription_status: 'active',
-    billing_cycle: 'monthly',
-    stripe_customer_id: null as string | null,
-    created_at: '2025-01-01T00:00:00Z',
-  }
-  const sessions: Array<{ tool_used: string; created_at: string }> = []
-  const saved: Array<{
-    id: string; player_name: string | null; game_date: string
-    save_name: string | null; output_proj_pts: number | null
-    output_proj_reb: number | null; output_proj_ast: number | null
-    created_at: string
-  }> = []
+  const wallet = await getWalletForUser(userId)
+  if (!wallet) redirect('/join')
 
-  const tier = wallet.tier_slug as TierSlug
+  const supabase = createServiceClient()
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  startOfMonth.setHours(0, 0, 0, 0)
+
+  const [sessionsRes, savedRes] = await Promise.all([
+    supabase
+      .from('picks_tool_sessions')
+      .select('tool_used, created_at')
+      .eq('clerk_user_id', userId)
+      .eq('brand_id', BRAND.slug)
+      .gte('created_at', startOfMonth.toISOString()),
+
+    supabase
+      .from('picks_custom_inputs')
+      .select('id, player_name, game_date, save_name, output_proj_pts, output_proj_reb, output_proj_ast, created_at')
+      .eq('clerk_user_id', userId)
+      .eq('brand_id', BRAND.slug)
+      .eq('is_saved', true)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
+
+  const sessions = sessionsRes.data || []
+  const saved = savedRes.data || []
+
+  const tier = (wallet.tier_slug ?? 'core') as TierSlug
   const tierConfig = BRAND.tiers.find(t => t.slug === tier)
 
   const usageCounts: Record<string, number> = {}
@@ -101,10 +119,10 @@ export default async function PortalPage() {
           gap: '16px', marginBottom: '32px',
         }}>
           {[
-            { label: 'STATUS',       value: 'Active',                                             color: C.confirm },
-            { label: 'BILLING',      value: 'Monthly',                                            color: C.signal },
-            { label: 'TIER',         value: tier.charAt(0).toUpperCase() + tier.slice(1),         color: tierConfig?.color || C.accentLight },
-            { label: 'MEMBER SINCE', value: memberSince,                                          color: C.textMuted },
+            { label: 'STATUS',       value: wallet.subscription_status === 'active' ? 'Active' : (wallet.subscription_status ?? 'Inactive'), color: wallet.subscription_status === 'active' ? C.confirm : C.textMuted },
+            { label: 'BILLING',      value: wallet.billing_cycle ? wallet.billing_cycle.charAt(0).toUpperCase() + wallet.billing_cycle.slice(1) : '—', color: C.signal },
+            { label: 'TIER',         value: tier.charAt(0).toUpperCase() + tier.slice(1), color: tierConfig?.color || C.accentLight },
+            { label: 'MEMBER SINCE', value: memberSince, color: C.textMuted },
           ].map(s => (
             <div key={s.label} style={{
               background: C.surface, border: `1px solid ${C.border}`,
@@ -275,7 +293,6 @@ export default async function PortalPage() {
             </div>
           ) : (
             <div>
-              {/* Table header */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '2fr 100px 80px 80px 80px 100px',

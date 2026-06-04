@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-
-const BRAND_ID = '247cashpicks'
+import { BRAND } from '@/config/brand'
 
 // GET /api/projections?date=2026-05-12&player=luka
 export async function GET(req: NextRequest) {
@@ -20,7 +19,7 @@ export async function GET(req: NextRequest) {
       confidence_score, data_quality_flags,
       game_id, game_date
     `)
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .eq('game_date', date)
     .order('confidence_score', { ascending: false })
 
@@ -39,7 +38,7 @@ export async function GET(req: NextRequest) {
   const { data: matchups } = await supabase
     .from('picks_matchups')
     .select('*')
-    .eq('brand_id', BRAND_ID)
+    .eq('brand_id', BRAND.slug)
     .eq('game_date', date)
     .in('player_name', playerNames)
 
