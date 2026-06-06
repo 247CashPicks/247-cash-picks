@@ -1,12 +1,19 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { BRAND } from '@/config/brand'
 import { runProjection, LEAGUE_DEFAULTS } from '@/lib/picks/model'
 import type { ProjectionInputs, ProjectionOutputs } from '@/lib/picks/types'
 
 const C = BRAND.colors
 const F = BRAND.fonts
+
+const NAV = [
+  ['SIGNALS',  '/picks'],
+  ['ENGINE',   '/tools'],
+  ['PIPELINE', '/dashboard'],
+  ['TIERS',    '/join'],
+] as [string, string][]
 
 const DEFAULT_INPUTS: ProjectionInputs = {
   projectedMinutes: 32,
@@ -40,30 +47,37 @@ function InputRow({
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '12px',
-      padding: '10px 0',
-      borderBottom: '1px solid rgba(255,255,255,0.05)',
+      padding: '9px 0',
+      borderBottom: `1px solid ${C.border}`,
     }}>
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', color: C.textMuted }}>{label}</span>
+          <span style={{
+            fontFamily: F.mono, fontSize: '11px', color: C.dim,
+            letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+          }}>
+            {label}
+          </span>
           {isAgent && !isOverridden && (
             <span style={{
-              fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
-              color: C.accentLight, background: 'rgba(167,139,250,0.1)',
-              border: `1px solid rgba(167,139,250,0.2)`,
-              borderRadius: '4px', padding: '2px 6px',
+              fontFamily: F.mono, fontSize: '9px', fontWeight: 500,
+              letterSpacing: '0.08em', color: C.signalCyan,
+              background: 'rgba(47,212,232,0.08)',
+              border: `1px solid rgba(47,212,232,0.2)`,
+              padding: '2px 6px',
             }}>
               AGENT
             </span>
           )}
           {isOverridden && (
             <span style={{
-              fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px',
-              color: C.signal, background: 'rgba(56,189,248,0.1)',
-              border: `1px solid rgba(56,189,248,0.2)`,
-              borderRadius: '4px', padding: '2px 6px',
+              fontFamily: F.mono, fontSize: '9px', fontWeight: 500,
+              letterSpacing: '0.08em', color: C.signalCyan,
+              background: 'rgba(47,212,232,0.1)',
+              border: `1px solid rgba(47,212,232,0.25)`,
+              padding: '2px 6px',
             }}>
-              YOUR OVERRIDE
+              OVERRIDE
             </span>
           )}
         </div>
@@ -74,42 +88,43 @@ function InputRow({
         step={step}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
         style={{
-          width: '90px', background: C.surface2,
-          border: `1px solid ${isOverridden ? 'rgba(56,189,248,0.4)' : 'rgba(255,255,255,0.1)'}`,
-          borderRadius: '8px', padding: '8px 10px',
-          color: '#fff', fontSize: '14px', fontWeight: 600,
+          width: '90px', background: C.void,
+          border: `1px solid ${isOverridden ? 'rgba(47,212,232,0.35)' : C.border}`,
+          padding: '7px 10px',
+          color: C.platinum, fontSize: '13px', fontWeight: 500,
           textAlign: 'right' as const, outline: 'none',
-          fontFamily: F.body,
+          fontFamily: F.mono,
         }}
       />
     </div>
   )
 }
 
-function FactorBar({ label, value, neutral = 1.0, color }: {
+function FactorBar({ label, value, neutral = 1.0 }: {
   label: string; value: number; neutral?: number; color: string
 }) {
   const pct = Math.min(Math.max((value / (neutral * 1.5)) * 100, 0), 100)
   const isPositive = value >= neutral
   return (
-    <div style={{ marginBottom: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-        <span style={{ fontSize: '13px', color: C.textMuted }}>{label}</span>
+    <div style={{ marginBottom: '14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
         <span style={{
-          fontSize: '14px', fontWeight: 700,
-          color: isPositive ? C.confirm : '#EF4444',
+          fontFamily: F.mono, fontSize: '11px', color: C.dim,
+          letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+        }}>
+          {label}
+        </span>
+        <span style={{
+          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+          color: isPositive ? C.signalCyan : C.flagAmber,
         }}>
           {value.toFixed(3)}
         </span>
       </div>
-      <div style={{
-        height: '6px', background: 'rgba(255,255,255,0.06)',
-        borderRadius: '3px', overflow: 'hidden',
-      }}>
+      <div style={{ height: '3px', background: 'rgba(255,255,255,0.06)' }}>
         <div style={{
           height: '100%', width: `${pct}%`,
-          background: isPositive ? color : '#EF4444',
-          borderRadius: '3px',
+          background: isPositive ? C.signalCyan : C.flagAmber,
           transition: 'width 0.3s ease',
         }} />
       </div>
@@ -125,6 +140,12 @@ export default function ProjectionRunnerPage() {
   const [playerName, setPlayerName] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  const [suggestions, setSuggestions]               = useState<{ player_name: string; team: string; position: string }[]>([])
+  const [showSuggestions, setShowSuggestions]       = useState(false)
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [highlightedIdx, setHighlightedIdx]         = useState(-1)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const markOverride = useCallback((key: string) => {
     setOverrides(prev => new Set([...prev, key]))
@@ -177,378 +198,570 @@ export default function ProjectionRunnerPage() {
     }
   }
 
+  const setFromAgent = useCallback((
+    per36Vals: { pts: number; reb: number; ast: number },
+    minutes: number
+  ) => {
+    setInputs(prev => ({ ...prev, per36: per36Vals, projectedMinutes: minutes }))
+    setOverrides(prev => {
+      const next = new Set(prev)
+      next.delete('per36_pts')
+      next.delete('per36_reb')
+      next.delete('per36_ast')
+      next.delete('projectedMinutes')
+      return next
+    })
+    setHasRun(false)
+  }, [])
+
+  const selectPlayer = useCallback(async (player: { player_name: string; team: string; position: string }) => {
+    setPlayerName(player.player_name)
+    setSuggestions([])
+    setShowSuggestions(false)
+    setHighlightedIdx(-1)
+    try {
+      const res = await fetch(
+        `/api/players/stats?player=${encodeURIComponent(player.player_name)}&team=${encodeURIComponent(player.team)}`
+      )
+      if (res.ok) {
+        const { stats } = await res.json()
+        if (stats) {
+          setFromAgent(
+            { pts: stats.per36_pts, reb: stats.per36_reb, ast: stats.per36_ast },
+            Math.round(stats.avg_minutes * 10) / 10
+          )
+        }
+      }
+    } catch {
+      // silently fail — form retains current values
+    }
+  }, [setFromAgent])
+
+  const handleSearchInput = useCallback((text: string) => {
+    setPlayerName(text)
+    setHighlightedIdx(-1)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (text.length < 2) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+    searchTimerRef.current = setTimeout(async () => {
+      setLoadingSuggestions(true)
+      try {
+        const res = await fetch(`/api/players/search?q=${encodeURIComponent(text)}`)
+        if (res.ok) {
+          const { players } = await res.json()
+          setSuggestions(players || [])
+          setShowSuggestions((players || []).length > 0)
+        }
+      } catch {
+        setSuggestions([])
+        setShowSuggestions(false)
+      } finally {
+        setLoadingSuggestions(false)
+      }
+    }, 250)
+  }, [])
+
   const matchupShare = inputs.matchupShare ?? LEAGUE_DEFAULTS.matchupShare
 
   return (
-    <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
+    <div style={{ background: C.void, minHeight: '100vh' }}>
 
-      {/* Header */}
+      {/* Fixed grid bg */}
       <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
-        padding: '28px 40px',
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        backgroundImage: `linear-gradient(rgba(47,212,232,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(47,212,232,0.04) 1px, transparent 1px)`,
+        backgroundSize: '48px 48px',
+      }} />
+
+      {/* Nav */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        height: '56px',
+        background: 'rgba(0,0,0,0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center',
+        padding: '0 clamp(24px,4vw,48px)',
+        gap: '32px',
       }}>
+        <a href="/" style={{
+          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+          color: C.signalCyan, letterSpacing: '0.05em', textDecoration: 'none',
+          marginRight: 'auto',
+        }}>
+          {BRAND.name}
+        </a>
+        {NAV.map(([label, href]) => (
+          <a key={href} href={href} style={{
+            fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
+            color: href === '/tools' ? C.signalCyan : C.dim,
+            textDecoration: 'none',
+          }}>
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      <div style={{ position: 'relative', zIndex: 1, paddingTop: '56px' }}>
+
+        {/* Header */}
+        <div style={{
+          background: C.panel, borderBottom: `1px solid ${C.border}`,
+          padding: '22px clamp(24px,4vw,48px)',
+        }}>
+          <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <a href="/tools" style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.faint,
+                    textDecoration: 'none', letterSpacing: '0.06em',
+                  }}>
+                    ‹ /tools
+                  </a>
+                  <span style={{ color: C.border, fontSize: '14px' }}>|</span>
+                  <span style={{
+                    fontFamily: F.mono, fontSize: '11px',
+                    color: C.signalCyan, letterSpacing: '0.12em',
+                  }}>
+                    // PROJECTION ENGINE
+                  </span>
+                </div>
+                <h1 style={{
+                  fontFamily: F.sans, fontSize: 'clamp(20px,2.5vw,28px)', fontWeight: 500,
+                  color: C.platinum, margin: '0 0 6px', letterSpacing: '-0.03em',
+                }}>
+                  RUN THE <span style={{ color: C.signalCyan }}>MODEL.</span>
+                </h1>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '11px', color: C.faint, letterSpacing: '0.04em',
+                }}>
+                  {'> run_projection --player=... --slate=tonight'}
+                </div>
+              </div>
+              <div style={{
+                fontFamily: F.mono, fontSize: '11px', color: C.signalCyan,
+                border: `1px solid ${C.border}`, padding: '6px 14px',
+                letterSpacing: '0.08em',
+              }}>
+                ANALYST+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
         <div style={{
           maxWidth: '1400px', margin: '0 auto',
-          display: 'flex', alignItems: 'center', gap: '16px',
+          padding: 'clamp(20px,3vw,32px) clamp(24px,4vw,48px)',
         }}>
-          <a href="/tools" style={{ color: C.textMuted, textDecoration: 'none', fontSize: '14px' }}>
-            ← Lab
-          </a>
-          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-          <span style={{ fontSize: '24px' }}>⚡</span>
-          <h1 style={{
-            fontFamily: F.heading, fontSize: '28px', fontWeight: 900,
-            margin: 0, color: C.accentLight, letterSpacing: '0.5px',
-          }}>
-            PROJECTION ENGINE
-          </h1>
-          <div style={{
-            marginLeft: 'auto',
-            background: 'rgba(167,139,250,0.08)',
-            border: `1px solid ${C.border}`,
-            borderRadius: '100px', padding: '6px 16px',
-            fontSize: '12px', color: C.accentLight,
-          }}>
-            Analyst+ Access
-          </div>
-        </div>
-      </div>
+          <div className="tool-layout">
 
-      <div style={{
-        maxWidth: '1400px', margin: '0 auto',
-        padding: '32px 40px',
-        display: 'grid',
-        gridTemplateColumns: '420px 1fr',
-        gap: '32px',
-        alignItems: 'start',
-      }}>
-
-        {/* LEFT — Inputs */}
-        <div>
-          {/* Player name */}
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', padding: '24px', marginBottom: '16px',
-          }}>
-            <div style={{
-              fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '1px', marginBottom: '12px',
-            }}>
-              PLAYER
-            </div>
-            <input
-              type="text"
-              placeholder="Player name..."
-              value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-              style={{
-                width: '100%', background: C.surface2,
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '8px', padding: '10px 14px',
-                color: '#fff', fontSize: '16px', fontWeight: 500,
-                outline: 'none', boxSizing: 'border-box' as const,
-                fontFamily: F.body,
-              }}
-            />
-          </div>
-
-          {/* Per-36 stats */}
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', padding: '24px', marginBottom: '16px',
-          }}>
-            <div style={{
-              fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '1px', marginBottom: '4px',
-            }}>
-              PER-36 STATS
-            </div>
-            <p style={{ fontSize: '12px', color: C.textMuted, margin: '0 0 12px' }}>
-              Source: RotoGrinders Court-IQ (lineup-adjusted)
-            </p>
-            <InputRow label="Points / 36" value={inputs.per36.pts}
-              onChange={v => updatePer36('pts', v)} isAgent isOverridden={overrides.has('per36_pts')} />
-            <InputRow label="Rebounds / 36" value={inputs.per36.reb}
-              onChange={v => updatePer36('reb', v)} isAgent isOverridden={overrides.has('per36_reb')} />
-            <InputRow label="Assists / 36" value={inputs.per36.ast}
-              onChange={v => updatePer36('ast', v)} isAgent isOverridden={overrides.has('per36_ast')} />
-            <InputRow label="Proj. Minutes" value={inputs.projectedMinutes}
-              onChange={v => updateInput('projectedMinutes', v)} step={0.5}
-              isAgent isOverridden={overrides.has('projectedMinutes')} />
-
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              marginTop: '12px', padding: '10px 0',
-            }}>
-              <input
-                type="checkbox"
-                checked={inputs.lineupAdjApplied}
-                onChange={e => updateInput('lineupAdjApplied', e.target.checked)}
-                id="lineupAdj"
-                style={{ accentColor: C.accentLight, width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <label htmlFor="lineupAdj" style={{
-                fontSize: '13px', color: C.textMuted, cursor: 'pointer',
-              }}>
-                Apply lineup combination adjustment
-              </label>
-            </div>
-          </div>
-
-          {/* Pace */}
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', padding: '24px', marginBottom: '16px',
-          }}>
-            <div style={{
-              fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '1px', marginBottom: '12px',
-            }}>
-              PACE
-            </div>
-            <InputRow label="Opponent Pace" value={inputs.opponentPace}
-              onChange={v => updateInput('opponentPace', v)}
-              isAgent isOverridden={overrides.has('opponentPace')} />
-            <InputRow label="Individual Pace" value={inputs.individualPace}
-              onChange={v => updateInput('individualPace', v)}
-              isAgent isOverridden={overrides.has('individualPace')} />
-          </div>
-
-          {/* Defensive Rating */}
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', padding: '24px', marginBottom: '16px',
-          }}>
-            <div style={{
-              fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '1px', marginBottom: '12px',
-            }}>
-              DEFENSIVE RATING
-            </div>
-            <InputRow label="Opp. Def Rating" value={inputs.opponentDefRating}
-              onChange={v => updateInput('opponentDefRating', v)}
-              isAgent isOverridden={overrides.has('opponentDefRating')} />
-            <InputRow label="Indiv. Def Rating" value={inputs.individualDefRating}
-              onChange={v => updateInput('individualDefRating', v)}
-              isAgent isOverridden={overrides.has('individualDefRating')} />
-          </div>
-
-          {/* Rebounds + Assists */}
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', padding: '24px', marginBottom: '24px',
-          }}>
-            <div style={{
-              fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '1px', marginBottom: '12px',
-            }}>
-              REBOUNDS + ASSISTS
-            </div>
-            <InputRow label="Opp. Rebs Allowed/G" value={inputs.oppRebsAllowed}
-              onChange={v => updateInput('oppRebsAllowed', v)}
-              isAgent isOverridden={overrides.has('oppRebsAllowed')} />
-            <InputRow label="Defender Rebs / 36" value={inputs.indivRebsPer36}
-              onChange={v => updateInput('indivRebsPer36', v)}
-              isAgent isOverridden={overrides.has('indivRebsPer36')} />
-            <InputRow label="Opp. Ast Allowed/G" value={inputs.oppAstAllowed}
-              onChange={v => updateInput('oppAstAllowed', v)}
-              isAgent isOverridden={overrides.has('oppAstAllowed')} />
-          </div>
-
-          <button
-            onClick={runModel}
-            style={{
-              width: '100%', background: C.accent, color: C.text,
-              border: 'none', padding: '18px', borderRadius: '12px',
-              fontFamily: F.heading, fontWeight: 900, fontSize: '22px',
-              letterSpacing: '1px', cursor: 'pointer',
-              boxShadow: '0 0 40px rgba(109,40,217,0.3)',
-            }}
-          >
-            ⚡ EXECUTE MODEL
-          </button>
-        </div>
-
-        {/* RIGHT — Output */}
-        <div>
-          {!hasRun ? (
-            <div style={{
-              background: C.surface, border: `1px solid ${C.border}`,
-              borderRadius: '20px', padding: '64px 40px',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: '64px', marginBottom: '20px', opacity: 0.4 }}>⚡</div>
-              <h2 style={{
-                fontFamily: F.heading, fontSize: '28px', fontWeight: 800,
-                color: C.textMuted, margin: '0 0 12px',
-              }}>
-                SET YOUR INPUTS
-              </h2>
-              <p style={{ color: C.textMuted, fontSize: '15px', margin: 0 }}>
-                Fill in the player stats on the left, then hit Execute Model to see the model output.
-              </p>
-            </div>
-          ) : output && (
-            <>
-              {/* Projection outputs */}
+            {/* LEFT — Inputs */}
+            <div>
+              {/* Player name — autocomplete */}
               <div style={{
-                background: C.surface, border: `2px solid rgba(167,139,250,0.3)`,
-                borderRadius: '20px', padding: '36px', marginBottom: '24px',
-                position: 'relative', overflow: 'hidden',
+                background: C.panel, border: `1px solid ${C.border}`,
+                padding: '20px', marginBottom: '12px',
               }}>
-                <div style={{
-                  position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-                  background: `linear-gradient(90deg, transparent, ${C.accent}, transparent)`,
-                }} />
-
-                <div style={{
-                  fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-                  color: C.accentLight, letterSpacing: '1px', marginBottom: '24px',
-                }}>
-                  {playerName ? playerName.toUpperCase() : 'PLAYER'} — PROJECTIONS
-                </div>
-
-                <div style={{
-                  display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '16px', marginBottom: '32px',
-                }}>
-                  {[
-                    { label: 'PTS', value: output.projPts, color: C.confirm,     rgb: '52,211,153' },
-                    { label: 'REB', value: output.projReb, color: C.signal,      rgb: '56,189,248' },
-                    { label: 'AST', value: output.projAst, color: C.accentLight, rgb: '167,139,250' },
-                  ].map((s) => (
-                    <div key={s.label} style={{
-                      background: C.surface2, borderRadius: '14px',
-                      padding: '24px', textAlign: 'center',
-                      border: `1px solid rgba(${s.rgb},0.2)`,
-                    }}>
-                      <div style={{
-                        fontFamily: F.heading, fontSize: '56px', fontWeight: 900,
-                        color: s.color, lineHeight: 1,
-                      }}>
-                        {s.value}
-                      </div>
-                      <div style={{
-                        fontSize: '12px', color: C.textMuted,
-                        letterSpacing: '1.5px', marginTop: '8px',
-                      }}>
-                        {s.label}
-                      </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.dim, letterSpacing: '0.12em' }}>
+                    PLAYER
+                  </div>
+                  {loadingSuggestions && (
+                    <div style={{ fontFamily: F.mono, fontSize: '9px', color: C.faint, letterSpacing: '0.08em' }}>
+                      SEARCHING...
                     </div>
-                  ))}
+                  )}
                 </div>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    placeholder="type to search players..."
+                    value={playerName}
+                    onChange={e => handleSearchInput(e.target.value)}
+                    onBlur={() => setTimeout(() => {
+                      setShowSuggestions(false)
+                      setHighlightedIdx(-1)
+                    }, 150)}
+                    onKeyDown={(e) => {
+                      if (!showSuggestions || suggestions.length === 0) return
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        setHighlightedIdx(i => Math.min(i + 1, suggestions.length - 1))
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        setHighlightedIdx(i => Math.max(i - 1, 0))
+                      } else if (e.key === 'Enter' && highlightedIdx >= 0) {
+                        e.preventDefault()
+                        selectPlayer(suggestions[highlightedIdx])
+                      } else if (e.key === 'Escape') {
+                        setShowSuggestions(false)
+                        setHighlightedIdx(-1)
+                      }
+                    }}
+                    style={{
+                      width: '100%', background: C.void,
+                      border: `1px solid ${showSuggestions ? C.borderEmphasis : C.border}`,
+                      padding: '9px 12px',
+                      color: C.platinum, fontSize: '14px', fontWeight: 500,
+                      outline: 'none', boxSizing: 'border-box' as const,
+                      fontFamily: F.mono,
+                    }}
+                  />
 
-                {/* Model factors */}
-                <div style={{
-                  fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-                  color: C.textMuted, letterSpacing: '1px', marginBottom: '16px',
-                }}>
-                  COMPUTED FACTORS
+                  {/* Suggestions dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                      background: C.panel,
+                      border: `1px solid ${C.borderEmphasis}`,
+                      borderTop: 'none',
+                      maxHeight: '240px', overflowY: 'auto' as const,
+                    }}>
+                      {suggestions.map((s, i) => (
+                        <div
+                          key={`${s.player_name}-${s.team}`}
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            selectPlayer(s)
+                          }}
+                          onMouseEnter={() => setHighlightedIdx(i)}
+                          onMouseLeave={() => setHighlightedIdx(-1)}
+                          style={{
+                            padding: '10px 14px',
+                            borderBottom: i < suggestions.length - 1 ? `1px solid ${C.border}` : 'none',
+                            cursor: 'pointer',
+                            background: highlightedIdx === i ? 'rgba(47,212,232,0.08)' : 'transparent',
+                          }}
+                        >
+                          <span style={{
+                            fontFamily: F.sans, fontSize: '13px', fontWeight: 500,
+                            color: highlightedIdx === i ? C.signalCyan : C.platinum,
+                          }}>
+                            {s.player_name}
+                          </span>
+                          <span style={{
+                            fontFamily: F.mono, fontSize: '11px', color: C.dim, marginLeft: '8px',
+                          }}>
+                            · {s.team} · {s.position}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <FactorBar label="Fpace (Pace Factor)" value={output.fpace} color={C.accentLight} />
-                <FactorBar label="Fdef (Defense Factor)" value={output.fdef} color={C.signal} />
-                <FactorBar label="Reb Suppression Multiplier" value={output.rebSuppression} color={C.confirm} />
               </div>
 
-              {/* Formula transparency */}
+              {/* Per-36 stats */}
               <div style={{
-                background: C.surface, border: `1px solid ${C.border}`,
-                borderRadius: '16px', padding: '28px', marginBottom: '24px',
+                background: C.panel, border: `1px solid ${C.border}`,
+                padding: '20px', marginBottom: '12px',
               }}>
                 <div style={{
-                  fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-                  color: C.accentLight, letterSpacing: '1px', marginBottom: '16px',
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  letterSpacing: '0.12em', marginBottom: '2px',
                 }}>
-                  MODEL COMPUTATION
+                  PER-36 STATS
                 </div>
-                <div style={{
-                  background: C.surface2, borderRadius: '10px', padding: '20px',
-                  fontFamily: F.mono, fontSize: '13px',
-                  color: C.textMuted, lineHeight: 2,
+                <p style={{
+                  fontFamily: F.mono, fontSize: '10px', color: C.faint,
+                  margin: '0 0 12px', letterSpacing: '0.04em',
                 }}>
-                  <div>
-                    <span style={{ color: C.accentLight }}>Fpace</span>
-                    {' = '}
-                    ({inputs.opponentPace} ÷ {LEAGUE_DEFAULTS.pace}) × {matchupShare}
-                    {' + '}
-                    ({inputs.individualPace} ÷ {LEAGUE_DEFAULTS.pace}) × {1 - matchupShare}
-                    {' = '}
-                    <span style={{ color: '#fff', fontWeight: 700 }}>{output.fpace}</span>
-                  </div>
-                  <div>
-                    <span style={{ color: C.signal }}>Fdef</span>
-                    {' = '}
-                    ({inputs.opponentDefRating} ÷ {LEAGUE_DEFAULTS.defRating}) × {matchupShare}
-                    {' + '}
-                    ({inputs.individualDefRating} ÷ {LEAGUE_DEFAULTS.defRating}) × {1 - matchupShare}
-                    {' = '}
-                    <span style={{ color: '#fff', fontWeight: 700 }}>{output.fdef}</span>
-                  </div>
-                  <div>
-                    <span style={{ color: C.confirm }}>RebMult</span>
-                    {' = '}
-                    {inputs.indivRebsPer36} ÷ {LEAGUE_DEFAULTS.rebsPer36}
-                    {' = '}
-                    <span style={{ color: '#fff', fontWeight: 700 }}>{output.rebSuppression}</span>
-                  </div>
-                  <div style={{
-                    marginTop: '8px', paddingTop: '8px',
-                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                  Source: season per-36 baseline (editable)
+                </p>
+                <InputRow label="Points / 36" value={inputs.per36.pts}
+                  onChange={v => updatePer36('pts', v)} isAgent isOverridden={overrides.has('per36_pts')} />
+                <InputRow label="Rebounds / 36" value={inputs.per36.reb}
+                  onChange={v => updatePer36('reb', v)} isAgent isOverridden={overrides.has('per36_reb')} />
+                <InputRow label="Assists / 36" value={inputs.per36.ast}
+                  onChange={v => updatePer36('ast', v)} isAgent isOverridden={overrides.has('per36_ast')} />
+                <InputRow label="Proj. Minutes" value={inputs.projectedMinutes}
+                  onChange={v => updateInput('projectedMinutes', v)} step={0.5}
+                  isAgent isOverridden={overrides.has('projectedMinutes')} />
+
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  marginTop: '10px', padding: '10px 0',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={inputs.lineupAdjApplied}
+                    onChange={e => updateInput('lineupAdjApplied', e.target.checked)}
+                    id="lineupAdj"
+                    style={{ accentColor: C.signalCyan, width: '14px', height: '14px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="lineupAdj" style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.muted,
+                    cursor: 'pointer', letterSpacing: '0.04em',
                   }}>
-                    <span style={{ color: '#fff' }}>Proj PTS</span>
-                    {' = '}
-                    ({inputs.per36.pts} ÷ 36) × {inputs.projectedMinutes} × {output.fpace} × {output.fdef}
-                    {' = '}
-                    <span style={{ color: C.confirm, fontWeight: 700 }}>{output.projPts}</span>
-                  </div>
+                    Apply lineup combination adjustment
+                  </label>
                 </div>
               </div>
 
-              {/* Override summary */}
-              {overrides.size > 0 && (
+              {/* Pace */}
+              <div style={{
+                background: C.panel, border: `1px solid ${C.border}`,
+                padding: '20px', marginBottom: '12px',
+              }}>
                 <div style={{
-                  background: 'rgba(56,189,248,0.06)',
-                  border: '1px solid rgba(56,189,248,0.2)',
-                  borderRadius: '12px', padding: '16px 20px', marginBottom: '24px',
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  letterSpacing: '0.12em', marginBottom: '12px',
                 }}>
-                  <div style={{
-                    fontSize: '12px', color: C.signal, fontWeight: 700,
-                    marginBottom: '8px', letterSpacing: '0.5px',
-                  }}>
-                    YOUR OVERRIDES ({overrides.size} field{overrides.size !== 1 ? 's' : ''} changed from agent data)
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {Array.from(overrides).map(k => (
-                      <span key={k} style={{
-                        background: 'rgba(56,189,248,0.1)',
-                        border: '1px solid rgba(56,189,248,0.2)',
-                        borderRadius: '6px', padding: '3px 10px',
-                        fontSize: '12px', color: C.signal,
-                      }}>
-                        {k}
-                      </span>
-                    ))}
-                  </div>
+                  PACE
                 </div>
-              )}
+                <InputRow label="Opponent Pace" value={inputs.opponentPace}
+                  onChange={v => updateInput('opponentPace', v)}
+                  isAgent isOverridden={overrides.has('opponentPace')} />
+                <InputRow label="Individual Pace" value={inputs.individualPace}
+                  onChange={v => updateInput('individualPace', v)}
+                  isAgent isOverridden={overrides.has('individualPace')} />
+              </div>
 
-              {/* Save */}
+              {/* Defensive Rating */}
+              <div style={{
+                background: C.panel, border: `1px solid ${C.border}`,
+                padding: '20px', marginBottom: '12px',
+              }}>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  letterSpacing: '0.12em', marginBottom: '12px',
+                }}>
+                  DEFENSIVE RATING
+                </div>
+                <InputRow label="Opp. Def Rating" value={inputs.opponentDefRating}
+                  onChange={v => updateInput('opponentDefRating', v)}
+                  isAgent isOverridden={overrides.has('opponentDefRating')} />
+                <InputRow label="Indiv. Def Rating" value={inputs.individualDefRating}
+                  onChange={v => updateInput('individualDefRating', v)}
+                  isAgent isOverridden={overrides.has('individualDefRating')} />
+              </div>
+
+              {/* Rebounds + Assists */}
+              <div style={{
+                background: C.panel, border: `1px solid ${C.border}`,
+                padding: '20px', marginBottom: '20px',
+              }}>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  letterSpacing: '0.12em', marginBottom: '12px',
+                }}>
+                  REBOUNDS + ASSISTS
+                </div>
+                <InputRow label="Opp. Rebs Allowed/G" value={inputs.oppRebsAllowed}
+                  onChange={v => updateInput('oppRebsAllowed', v)}
+                  isAgent isOverridden={overrides.has('oppRebsAllowed')} />
+                <InputRow label="Defender Rebs / 36" value={inputs.indivRebsPer36}
+                  onChange={v => updateInput('indivRebsPer36', v)}
+                  isAgent isOverridden={overrides.has('indivRebsPer36')} />
+                <InputRow label="Opp. Ast Allowed/G" value={inputs.oppAstAllowed}
+                  onChange={v => updateInput('oppAstAllowed', v)}
+                  isAgent isOverridden={overrides.has('oppAstAllowed')} />
+              </div>
+
               <button
-                onClick={handleSave}
-                disabled={saving || saved}
+                onClick={runModel}
                 style={{
-                  width: '100%', background: saved ? 'rgba(167,139,250,0.1)' : C.surface2,
-                  color: saved ? C.accentLight : '#fff',
-                  border: `1px solid ${saved ? C.accentLight : 'rgba(255,255,255,0.15)'}`,
-                  padding: '14px', borderRadius: '10px',
-                  fontFamily: F.heading, fontWeight: 800, fontSize: '16px',
-                  letterSpacing: '0.5px', cursor: saving || saved ? 'default' : 'pointer',
+                  width: '100%', background: C.signalCyan, color: C.void,
+                  border: 'none', padding: '16px',
+                  fontFamily: F.mono, fontWeight: 500, fontSize: '14px',
+                  letterSpacing: '0.12em', cursor: 'pointer',
                 }}
               >
-                {saved ? 'SAVED TO LAB' : saving ? 'SAVING...' : '◎ SAVE TO LAB'}
+                ◆ EXECUTE MODEL
               </button>
-            </>
-          )}
+            </div>
+
+            {/* RIGHT — Output */}
+            <div>
+              {!hasRun ? (
+                <div style={{
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  padding: '64px 40px', textAlign: 'center',
+                }}>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '36px',
+                    color: C.faint, marginBottom: '16px', lineHeight: 1,
+                  }}>
+                    ◆
+                  </div>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.dim,
+                    letterSpacing: '0.12em', marginBottom: '10px',
+                  }}>
+                    AWAITING INPUT
+                  </div>
+                  <p style={{
+                    fontFamily: F.sans, color: C.faint, fontSize: '13px',
+                    margin: 0, lineHeight: 1.7,
+                  }}>
+                    Fill in the player stats on the left,<br />then execute the model.
+                  </p>
+                </div>
+              ) : output && (
+                <>
+                  {/* Projection outputs */}
+                  <div style={{
+                    background: C.panel,
+                    border: `1px solid ${C.borderEmphasis}`,
+                    borderLeft: `2px solid ${C.signalCyan}`,
+                    padding: '28px', marginBottom: '16px',
+                  }}>
+                    <div style={{
+                      fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                      letterSpacing: '0.12em', marginBottom: '20px',
+                    }}>
+                      {playerName ? playerName.toUpperCase() : 'PLAYER'} — PROJECTIONS
+                    </div>
+
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '12px', marginBottom: '28px',
+                    }}>
+                      {[
+                        { label: 'PTS', value: output.projPts, color: C.signalCyan },
+                        { label: 'REB', value: output.projReb, color: C.platinum   },
+                        { label: 'AST', value: output.projAst, color: C.muted      },
+                      ].map((s) => (
+                        <div key={s.label} style={{
+                          background: C.void, border: `1px solid ${C.border}`,
+                          padding: '20px', textAlign: 'center',
+                        }}>
+                          <div style={{
+                            fontFamily: F.mono, fontSize: 'clamp(32px,3.5vw,50px)',
+                            fontWeight: 500, color: s.color, lineHeight: 1,
+                          }}>
+                            {s.value}
+                          </div>
+                          <div style={{
+                            fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                            letterSpacing: '0.12em', marginTop: '6px',
+                          }}>
+                            {s.label}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{
+                      fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                      letterSpacing: '0.12em', marginBottom: '14px',
+                    }}>
+                      COMPUTED FACTORS
+                    </div>
+                    <FactorBar label="Fpace (Pace Factor)"          value={output.fpace}          color={C.signalCyan} />
+                    <FactorBar label="Fdef (Defense Factor)"        value={output.fdef}           color={C.signalCyan} />
+                    <FactorBar label="Reb Suppression Multiplier"   value={output.rebSuppression} color={C.signalCyan} />
+                  </div>
+
+                  {/* Formula transparency */}
+                  <div style={{
+                    background: C.panel, border: `1px solid ${C.border}`,
+                    padding: '24px', marginBottom: '16px',
+                  }}>
+                    <div style={{
+                      fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                      letterSpacing: '0.12em', marginBottom: '14px',
+                    }}>
+                      MODEL COMPUTATION
+                    </div>
+                    <div style={{
+                      background: C.void, padding: '16px',
+                      fontFamily: F.mono, fontSize: '11px',
+                      color: C.dim, lineHeight: 2.2, overflowX: 'auto',
+                    }}>
+                      <div>
+                        <span style={{ color: C.signalCyan }}>Fpace</span>
+                        {' = '}
+                        ({inputs.opponentPace} ÷ {LEAGUE_DEFAULTS.pace}) × {matchupShare}
+                        {' + '}
+                        ({inputs.individualPace} ÷ {LEAGUE_DEFAULTS.pace}) × {1 - matchupShare}
+                        {' = '}
+                        <span style={{ color: C.platinum, fontWeight: 500 }}>{output.fpace}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: C.signalCyan }}>Fdef</span>
+                        {' = '}
+                        ({inputs.opponentDefRating} ÷ {LEAGUE_DEFAULTS.defRating}) × {matchupShare}
+                        {' + '}
+                        ({inputs.individualDefRating} ÷ {LEAGUE_DEFAULTS.defRating}) × {1 - matchupShare}
+                        {' = '}
+                        <span style={{ color: C.platinum, fontWeight: 500 }}>{output.fdef}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: C.signalCyan }}>RebMult</span>
+                        {' = '}
+                        {inputs.indivRebsPer36} ÷ {LEAGUE_DEFAULTS.rebsPer36}
+                        {' = '}
+                        <span style={{ color: C.platinum, fontWeight: 500 }}>{output.rebSuppression}</span>
+                      </div>
+                      <div style={{
+                        marginTop: '8px', paddingTop: '8px',
+                        borderTop: `1px solid ${C.border}`,
+                      }}>
+                        <span style={{ color: C.muted }}>Proj PTS</span>
+                        {' = '}
+                        ({inputs.per36.pts} ÷ 36) × {inputs.projectedMinutes} × {output.fpace} × {output.fdef}
+                        {' = '}
+                        <span style={{ color: C.signalCyan, fontWeight: 500 }}>{output.projPts}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Override summary */}
+                  {overrides.size > 0 && (
+                    <div style={{
+                      background: 'rgba(47,212,232,0.04)',
+                      border: `1px solid rgba(47,212,232,0.18)`,
+                      padding: '14px 18px', marginBottom: '16px',
+                    }}>
+                      <div style={{
+                        fontFamily: F.mono, fontSize: '10px', color: C.signalCyan,
+                        letterSpacing: '0.08em', marginBottom: '8px',
+                      }}>
+                        OVERRIDES — {overrides.size} field{overrides.size !== 1 ? 's' : ''} changed from agent data
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {Array.from(overrides).map(k => (
+                          <span key={k} style={{
+                            background: 'rgba(47,212,232,0.08)',
+                            border: `1px solid rgba(47,212,232,0.2)`,
+                            padding: '2px 8px',
+                            fontFamily: F.mono, fontSize: '10px', color: C.signalCyan,
+                          }}>
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Save */}
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || saved}
+                    style={{
+                      width: '100%',
+                      background: saved ? 'rgba(47,212,232,0.08)' : C.void,
+                      color: saved ? C.signalCyan : C.muted,
+                      border: `1px solid ${saved ? C.borderEmphasis : C.border}`,
+                      padding: '12px',
+                      fontFamily: F.mono, fontWeight: 500, fontSize: '13px',
+                      letterSpacing: '0.1em',
+                      cursor: saving || saved ? 'default' : 'pointer',
+                    }}
+                  >
+                    {saved ? '◎ SAVED TO LAB' : saving ? 'SAVING...' : '◎ SAVE TO LAB'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
