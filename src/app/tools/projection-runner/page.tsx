@@ -146,6 +146,7 @@ export default function ProjectionRunnerPage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [highlightedIdx, setHighlightedIdx]         = useState(-1)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [matchupSource, setMatchupSource] = useState<'defaults' | 'agent' | null>(null)
 
   const markOverride = useCallback((key: string) => {
     setOverrides(prev => new Set([...prev, key]))
@@ -214,17 +215,55 @@ export default function ProjectionRunnerPage() {
     setHasRun(false)
   }, [])
 
+  const setMatchupFromAgent = useCallback((m: {
+    opponent_pace:        number | null
+    individual_pace:      number | null
+    opponent_def_rating:  number | null
+    individual_def_rating: number | null
+    opp_rebs_allowed:     number | null
+    opp_ast_allowed:      number | null
+    weight_boost_pct:     number | null
+  }) => {
+    setInputs(prev => ({
+      ...prev,
+      opponentPace:        m.opponent_pace        ?? prev.opponentPace,
+      individualPace:      m.individual_pace       ?? prev.individualPace,
+      opponentDefRating:   m.opponent_def_rating   ?? prev.opponentDefRating,
+      individualDefRating: m.individual_def_rating ?? prev.individualDefRating,
+      oppRebsAllowed:      m.opp_rebs_allowed      ?? prev.oppRebsAllowed,
+      oppAstAllowed:       m.opp_ast_allowed       ?? prev.oppAstAllowed,
+      weightBoostPct:      m.weight_boost_pct      ?? prev.weightBoostPct,
+    }))
+    setOverrides(prev => {
+      const next = new Set(prev)
+      next.delete('opponentPace')
+      next.delete('individualPace')
+      next.delete('opponentDefRating')
+      next.delete('individualDefRating')
+      next.delete('oppRebsAllowed')
+      next.delete('oppAstAllowed')
+      return next
+    })
+    setHasRun(false)
+    setMatchupSource('agent')
+  }, [])
+
   const selectPlayer = useCallback(async (player: { player_name: string; team: string; position: string }) => {
     setPlayerName(player.player_name)
     setSuggestions([])
     setShowSuggestions(false)
     setHighlightedIdx(-1)
+
+    const today = new Date().toISOString().split('T')[0]
+    const [statsResult, matchupResult] = await Promise.allSettled([
+      fetch(`/api/players/stats?player=${encodeURIComponent(player.player_name)}&team=${encodeURIComponent(player.team)}`),
+      fetch(`/api/tools/matchup-context?player=${encodeURIComponent(player.player_name)}&date=${today}`),
+    ])
+
+    // Per-36 + minutes (unchanged behavior)
     try {
-      const res = await fetch(
-        `/api/players/stats?player=${encodeURIComponent(player.player_name)}&team=${encodeURIComponent(player.team)}`
-      )
-      if (res.ok) {
-        const { stats } = await res.json()
+      if (statsResult.status === 'fulfilled' && statsResult.value.ok) {
+        const { stats } = await statsResult.value.json()
         if (stats) {
           setFromAgent(
             { pts: stats.per36_pts, reb: stats.per36_reb, ast: stats.per36_ast },
@@ -235,7 +274,23 @@ export default function ProjectionRunnerPage() {
     } catch {
       // silently fail — form retains current values
     }
-  }, [setFromAgent])
+
+    // Opponent / matchup context
+    try {
+      if (matchupResult.status === 'fulfilled' && matchupResult.value.ok) {
+        const data = await matchupResult.value.json()
+        if (data.found) {
+          setMatchupFromAgent(data.matchup)
+        } else {
+          setMatchupSource('defaults')
+        }
+      } else {
+        setMatchupSource('defaults')
+      }
+    } catch {
+      setMatchupSource('defaults')
+    }
+  }, [setFromAgent, setMatchupFromAgent])
 
   const handleSearchInput = useCallback((text: string) => {
     setPlayerName(text)
@@ -503,6 +558,22 @@ export default function ProjectionRunnerPage() {
                   </label>
                 </div>
               </div>
+
+              {/* Opponent / matchup source note */}
+              {matchupSource !== null && (
+                <div style={{
+                  marginBottom: '8px', padding: '8px 14px',
+                  background: matchupSource === 'agent'
+                    ? 'rgba(47,212,232,0.03)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${C.border}`,
+                  fontFamily: F.mono, fontSize: '10px', letterSpacing: '0.04em',
+                  color: matchupSource === 'agent' ? C.signalCyan : C.faint,
+                }}>
+                  {matchupSource === 'agent'
+                    ? '◆ opponent context: today\'s matchup data'
+                    : '– no slate matchup found — using league defaults (editable)'}
+                </div>
+              )}
 
               {/* Pace */}
               <div style={{
