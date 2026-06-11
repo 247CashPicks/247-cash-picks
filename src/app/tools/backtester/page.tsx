@@ -6,7 +6,14 @@ import { BRAND } from '@/config/brand'
 const C = BRAND.colors
 const F = BRAND.fonts
 
-type DateRange = '7d' | '30d' | 'custom'
+const NAV = [
+  ['SIGNALS',  '/picks'],
+  ['ENGINE',   '/tools'],
+  ['PIPELINE', '/dashboard'],
+  ['TIERS',    '/join'],
+] as [string, string][]
+
+type DateRange  = '7d' | '30d' | 'custom'
 type StatFilter = 'all' | 'pts' | 'reb' | 'ast'
 type ConfFilter = 'all' | 'high' | 'medium' | 'low'
 
@@ -24,67 +31,65 @@ interface BacktestResult {
   weakPlayers: { name: string; hits: number; total: number; rate: number }[]
 }
 
-const SAMPLE_RESULT: BacktestResult = {
-  totalPicks: 142,
-  resolved: 138,
-  hits: 101,
-  misses: 37,
-  hitRate: 73.2,
-  avgEdge: 4.8,
-  avgProjectionError: 2.3,
-  byConfidence: {
-    high:   { hits: 52, total: 64,  rate: 81.3 },
-    medium: { hits: 41, total: 58,  rate: 70.7 },
-    low:    { hits: 8,  total: 16,  rate: 50.0 },
-  },
-  byStat: {
-    pts: { hits: 44, total: 58, rate: 75.9 },
-    reb: { hits: 31, total: 44, rate: 70.5 },
-    ast: { hits: 26, total: 36, rate: 72.2 },
-  },
-  topPlayers: [
-    { name: 'Nikola Jokić',            hits: 9,  total: 11, rate: 81.8 },
-    { name: 'Shai Gilgeous-Alexander', hits: 8,  total: 10, rate: 80.0 },
-    { name: 'Luka Dončić',             hits: 10, total: 13, rate: 76.9 },
-    { name: 'Anthony Davis',           hits: 7,  total: 9,  rate: 77.8 },
-  ],
-  weakPlayers: [
-    { name: 'LeBron James', hits: 4, total: 8, rate: 50.0 },
-    { name: 'Jayson Tatum', hits: 5, total: 9, rate: 55.6 },
-  ],
+function computeDateRange(range: DateRange): { dateFrom: string; dateTo: string } {
+  const today  = new Date()
+  const dateTo = today.toISOString().split('T')[0]
+  const daysBack = range === '7d' ? 7 : 30
+  const from = new Date(today)
+  from.setDate(from.getDate() - daysBack)
+  return { dateFrom: from.toISOString().split('T')[0], dateTo }
 }
 
-function RateBar({ rate, color }: { rate: number; color: string }) {
+function rateColor(rate: number): string {
+  return rate >= 70 ? C.signalCyan : C.flagAmber
+}
+
+function RateBar({ rate }: { rate: number; color: string }) {
   return (
     <div style={{
-      height: '6px', background: 'rgba(255,255,255,0.06)',
-      borderRadius: '3px', overflow: 'hidden', marginTop: '6px',
+      height: '3px', background: 'rgba(255,255,255,0.06)',
+      marginTop: '6px',
     }}>
       <div style={{
         height: '100%', width: `${rate}%`,
-        background: rate >= 70 ? color : rate >= 55 ? C.caution : '#EF4444',
-        borderRadius: '3px',
+        background: rateColor(rate),
       }} />
     </div>
   )
 }
 
 export default function BacktesterPage() {
-  const [dateRange, setDateRange] = useState<DateRange>('30d')
+  const [dateRange, setDateRange]   = useState<DateRange>('30d')
   const [statFilter, setStatFilter] = useState<StatFilter>('all')
   const [confFilter, setConfFilter] = useState<ConfFilter>('all')
-  const [running, setRunning] = useState(false)
-  const [result, setResult] = useState<BacktestResult | null>(null)
-  const [exporting, setExporting] = useState(false)
-
-  void statFilter
-  void confFilter
+  const [running, setRunning]       = useState(false)
+  const [result, setResult]         = useState<BacktestResult | null>(null)
+  const [exporting, setExporting]   = useState(false)
+  const [error, setError]           = useState<string | null>(null)
 
   const handleRun = async () => {
     setRunning(true)
-    await new Promise(r => setTimeout(r, 1800))
-    setResult(SAMPLE_RESULT)
-    setRunning(false)
+    setError(null)
+    setResult(null)
+    try {
+      const { dateFrom, dateTo } = computeDateRange(dateRange)
+      const res = await fetch('/api/tools/backtester', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dateFrom, dateTo, statFilter, confFilter }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError((body as { error?: string }).error ?? `Server error ${res.status}`)
+        return
+      }
+      const data = await res.json()
+      setResult(data as BacktestResult)
+    } catch {
+      setError('Network error — unable to reach server. Check your connection and try again.')
+    } finally {
+      setRunning(false)
+    }
   }
 
   const handleExport = () => {
@@ -118,307 +123,466 @@ export default function BacktesterPage() {
   }
 
   return (
-    <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
+    <div style={{ background: C.void, minHeight: '100vh' }}>
 
-      {/* Header */}
+      {/* Fixed grid bg */}
       <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
-        padding: '28px 40px',
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        backgroundImage: `linear-gradient(rgba(47,212,232,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(47,212,232,0.04) 1px, transparent 1px)`,
+        backgroundSize: '48px 48px',
+      }} />
+
+      {/* Nav */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        height: '56px',
+        background: 'rgba(0,0,0,0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center',
+        padding: '0 clamp(24px,4vw,48px)',
+        gap: '32px',
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <a href="/tools" style={{ color: C.textMuted, textDecoration: 'none', fontSize: '14px' }}>
-            ← Lab
-          </a>
-          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-          <span style={{ fontSize: '24px' }}>📊</span>
-          <h1 style={{
-            fontFamily: F.heading, fontSize: '28px', fontWeight: 900,
-            margin: 0, color: '#a78bfa', letterSpacing: '0.5px',
-          }}>
-            ACCURACY INDEX
-          </h1>
-          <div style={{
-            marginLeft: 'auto',
-            background: 'rgba(167,139,250,0.08)',
-            border: '1px solid rgba(167,139,250,0.2)',
-            borderRadius: '100px', padding: '6px 16px',
-            fontSize: '12px', color: '#a78bfa',
-          }}>
-            Nexus Access
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 40px' }}>
-
-        {/* Filters */}
-        <div style={{
-          background: C.surface, border: `1px solid ${C.border}`,
-          borderRadius: '16px', padding: '28px',
-          marginBottom: '24px',
+        <a href="/" style={{
+          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+          color: C.signalCyan, letterSpacing: '0.05em', textDecoration: 'none',
+          marginRight: 'auto',
         }}>
-          <h2 style={{
-            fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-            margin: '0 0 20px', letterSpacing: '0.5px', color: '#a78bfa',
+          {BRAND.name}
+        </a>
+        {NAV.map(([label, href]) => (
+          <a key={href} href={href} style={{
+            fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
+            color: href === '/tools' ? C.signalCyan : C.dim,
+            textDecoration: 'none',
           }}>
-            ANALYSIS PARAMETERS
-          </h2>
+            {label}
+          </a>
+        ))}
+      </nav>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '24px' }}>
+      <div style={{ position: 'relative', zIndex: 1, paddingTop: '56px' }}>
 
-            {/* Date range */}
-            <div>
-              <div style={{ fontSize: '12px', color: C.textMuted, fontWeight: 700, letterSpacing: '0.5px', marginBottom: '10px' }}>
-                DATE RANGE
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {([['7d', 'Last 7 days'], ['30d', 'Last 30 days']] as [DateRange, string][]).map(([v, l]) => (
-                  <button key={v} onClick={() => setDateRange(v)} style={{
-                    flex: 1, padding: '8px', borderRadius: '8px', cursor: 'pointer',
-                    background: dateRange === v ? 'rgba(167,139,250,0.15)' : C.surface2,
-                    border: `1px solid ${dateRange === v ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                    color: dateRange === v ? '#a78bfa' : C.textMuted,
-                    fontSize: '12px', fontWeight: 700,
+        {/* Header */}
+        <div style={{
+          background: C.panel, borderBottom: `1px solid ${C.border}`,
+          padding: '22px clamp(24px,4vw,48px)',
+        }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <a href="/tools" style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.faint,
+                    textDecoration: 'none', letterSpacing: '0.06em',
                   }}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Stat filter */}
-            <div>
-              <div style={{ fontSize: '12px', color: C.textMuted, fontWeight: 700, letterSpacing: '0.5px', marginBottom: '10px' }}>
-                STAT TYPE
-              </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {(['all', 'pts', 'reb', 'ast'] as StatFilter[]).map(v => (
-                  <button key={v} onClick={() => setStatFilter(v)} style={{
-                    padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
-                    background: statFilter === v ? 'rgba(167,139,250,0.15)' : C.surface2,
-                    border: `1px solid ${statFilter === v ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                    color: statFilter === v ? '#a78bfa' : C.textMuted,
-                    fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const,
+                    ‹ /tools
+                  </a>
+                  <span style={{ color: C.border, fontSize: '14px' }}>|</span>
+                  <span style={{
+                    fontFamily: F.mono, fontSize: '11px',
+                    color: C.signalCyan, letterSpacing: '0.12em',
                   }}>
-                    {v}
-                  </button>
-                ))}
+                    // ACCURACY INDEX
+                  </span>
+                </div>
+                <h1 style={{
+                  fontFamily: F.sans, fontSize: 'clamp(20px,2.5vw,28px)', fontWeight: 500,
+                  color: C.platinum, margin: '0 0 6px', letterSpacing: '-0.03em',
+                }}>
+                  TEST THE <span style={{ color: C.signalCyan }}>MODEL.</span>
+                </h1>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '11px', color: C.faint, letterSpacing: '0.04em',
+                }}>
+                  {'> run_backtest --range=30d --stat=all --conf=all'}
+                </div>
               </div>
-            </div>
-
-            {/* Confidence filter */}
-            <div>
-              <div style={{ fontSize: '12px', color: C.textMuted, fontWeight: 700, letterSpacing: '0.5px', marginBottom: '10px' }}>
-                CONFIDENCE
-              </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {(['all', 'high', 'medium', 'low'] as ConfFilter[]).map(v => (
-                  <button key={v} onClick={() => setConfFilter(v)} style={{
-                    padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
-                    background: confFilter === v ? 'rgba(167,139,250,0.15)' : C.surface2,
-                    border: `1px solid ${confFilter === v ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                    color: confFilter === v ? '#a78bfa' : C.textMuted,
-                    fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const,
-                  }}>
-                    {v}
-                  </button>
-                ))}
+              <div style={{
+                fontFamily: F.mono, fontSize: '11px', color: C.signalCyan,
+                border: `1px solid ${C.border}`, padding: '6px 14px',
+                letterSpacing: '0.08em',
+              }}>
+                NEXUS
               </div>
             </div>
           </div>
-
-          <button
-            onClick={handleRun}
-            disabled={running}
-            style={{
-              background: running ? 'rgba(167,139,250,0.3)' : '#a78bfa',
-              color: running ? C.textMuted : '#07080E',
-              border: 'none', padding: '14px 36px',
-              borderRadius: '10px', fontFamily: F.heading,
-              fontWeight: 800, fontSize: '18px', letterSpacing: '0.5px',
-              cursor: running ? 'default' : 'pointer',
-              boxShadow: running ? 'none' : '0 0 32px rgba(167,139,250,0.25)',
-            }}
-          >
-            {running ? '⏳ PROCESSING...' : '⚡ RUN ACCURACY ANALYSIS'}
-          </button>
         </div>
 
-        {/* Results */}
-        {result && (
-          <>
-            {/* Top stats */}
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(20px,3vw,32px) clamp(24px,4vw,48px)' }}>
+
+          {/* Filters */}
+          <div style={{
+            background: C.panel, border: `1px solid ${C.border}`,
+            padding: '24px',
+            marginBottom: '20px',
+          }}>
             <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '16px', marginBottom: '24px',
+              fontFamily: F.mono, fontSize: '11px', color: C.dim,
+              letterSpacing: '0.12em', marginBottom: '20px',
             }}>
-              {[
-                { label: 'HIT RATE',       value: `${result.hitRate}%`,           color: C.confirm },
-                { label: 'TOTAL PICKS',    value: result.resolved.toString(),      color: '#a78bfa' },
-                { label: 'AVG EDGE',       value: `+${result.avgEdge}%`,           color: C.signal },
-                { label: 'AVG PROJ ERROR', value: `±${result.avgProjectionError}`, color: C.caution },
-              ].map(s => (
-                <div key={s.label} style={{
-                  background: C.surface, border: `1px solid ${C.border}`,
-                  borderRadius: '14px', padding: '24px', textAlign: 'center',
+              ANALYSIS PARAMETERS
+            </div>
+
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '24px', marginBottom: '20px',
+            }}>
+
+              {/* Date range */}
+              <div>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  fontWeight: 500, letterSpacing: '0.1em', marginBottom: '8px',
                 }}>
-                  <div style={{
-                    fontFamily: F.heading, fontSize: '44px', fontWeight: 900,
-                    color: s.color, lineHeight: 1,
-                  }}>
-                    {s.value}
-                  </div>
-                  <div style={{
-                    fontSize: '11px', color: C.textMuted,
-                    letterSpacing: '1px', marginTop: '8px',
-                  }}>
-                    {s.label}
-                  </div>
+                  DATE RANGE
                 </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
-
-              {/* By confidence */}
-              <div style={{
-                background: C.surface, border: `1px solid ${C.border}`,
-                borderRadius: '16px', padding: '28px',
-              }}>
-                <h3 style={{
-                  fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-                  margin: '0 0 20px', letterSpacing: '0.5px',
-                }}>
-                  BY CONFIDENCE BAND
-                </h3>
-                {Object.entries(result.byConfidence).map(([conf, data]) => (
-                  <div key={conf} style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', color: C.textMuted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', fontWeight: 700 }}>
-                        {conf}
-                      </span>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: data.rate >= 70 ? C.confirm : data.rate >= 55 ? C.caution : '#EF4444' }}>
-                        {data.rate}% ({data.hits}/{data.total})
-                      </span>
-                    </div>
-                    <RateBar rate={data.rate} color={C.confirm} />
-                  </div>
-                ))}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {([['7d', 'Last 7 days'], ['30d', 'Last 30 days']] as [DateRange, string][]).map(([v, l]) => (
+                    <button key={v} onClick={() => setDateRange(v)} style={{
+                      flex: 1, padding: '8px 4px', cursor: 'pointer',
+                      background: dateRange === v ? 'rgba(47,212,232,0.1)' : C.void,
+                      border: `1px solid ${dateRange === v ? 'rgba(47,212,232,0.4)' : C.border}`,
+                      color: dateRange === v ? C.signalCyan : C.muted,
+                      fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
+                      letterSpacing: '0.06em',
+                    }}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* By stat */}
-              <div style={{
-                background: C.surface, border: `1px solid ${C.border}`,
-                borderRadius: '16px', padding: '28px',
-              }}>
-                <h3 style={{
-                  fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-                  margin: '0 0 20px', letterSpacing: '0.5px',
+              {/* Stat filter */}
+              <div>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  fontWeight: 500, letterSpacing: '0.1em', marginBottom: '8px',
                 }}>
-                  BY STAT TYPE
-                </h3>
-                {Object.entries(result.byStat).map(([stat, data]) => (
-                  <div key={stat} style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', color: C.textMuted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', fontWeight: 700 }}>
-                        {stat}
-                      </span>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: data.rate >= 70 ? C.confirm : data.rate >= 55 ? C.caution : '#EF4444' }}>
-                        {data.rate}% ({data.hits}/{data.total})
-                      </span>
-                    </div>
-                    <RateBar rate={data.rate} color={C.signal} />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* High / low variance players */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
-              <div style={{
-                background: C.surface, border: `1px solid ${C.border}`,
-                borderRadius: '16px', padding: '28px',
-              }}>
-                <h3 style={{
-                  fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-                  color: C.confirm, margin: '0 0 20px', letterSpacing: '0.5px',
-                }}>
-                  ✓ HIGH VARIANCE CORRELATION
-                </h3>
-                {result.topPlayers.map((p, i) => (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', padding: '10px 0',
-                    borderBottom: i < result.topPlayers.length - 1
-                      ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                  }}>
-                    <span style={{ fontSize: '14px', fontWeight: 500 }}>{p.name}</span>
-                    <span style={{ fontSize: '14px', fontWeight: 700, color: C.confirm }}>
-                      {p.rate}% ({p.hits}/{p.total})
-                    </span>
-                  </div>
-                ))}
+                  STAT TYPE
+                </div>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {(['all', 'pts', 'reb', 'ast'] as StatFilter[]).map(v => (
+                    <button key={v} onClick={() => setStatFilter(v)} style={{
+                      padding: '7px 10px', cursor: 'pointer',
+                      background: statFilter === v ? 'rgba(47,212,232,0.1)' : C.void,
+                      border: `1px solid ${statFilter === v ? 'rgba(47,212,232,0.4)' : C.border}`,
+                      color: statFilter === v ? C.signalCyan : C.muted,
+                      fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
+                      textTransform: 'uppercase' as const, letterSpacing: '0.06em',
+                    }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div style={{
-                background: C.surface, border: `1px solid ${C.border}`,
-                borderRadius: '16px', padding: '28px',
-              }}>
-                <h3 style={{
-                  fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-                  color: '#EF4444', margin: '0 0 20px', letterSpacing: '0.5px',
+              {/* Confidence filter */}
+              <div>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  fontWeight: 500, letterSpacing: '0.1em', marginBottom: '8px',
                 }}>
-                  ⚠ LOW VARIANCE CORRELATION
-                </h3>
-                {result.weakPlayers.map((p, i) => (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', padding: '10px 0',
-                    borderBottom: i < result.weakPlayers.length - 1
-                      ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                  }}>
-                    <span style={{ fontSize: '14px', fontWeight: 500 }}>{p.name}</span>
-                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#EF4444' }}>
-                      {p.rate}% ({p.hits}/{p.total})
-                    </span>
-                  </div>
-                ))}
-                <p style={{ fontSize: '13px', color: C.textMuted, margin: '16px 0 0', lineHeight: 1.6 }}>
-                  These players have edge cases the model doesn&apos;t fully capture.
-                  Apply extra scrutiny before transmitting signals on them.
-                </p>
+                  CONFIDENCE
+                </div>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {(['all', 'high', 'medium', 'low'] as ConfFilter[]).map(v => (
+                    <button key={v} onClick={() => setConfFilter(v)} style={{
+                      padding: '7px 10px', cursor: 'pointer',
+                      background: confFilter === v ? 'rgba(47,212,232,0.1)' : C.void,
+                      border: `1px solid ${confFilter === v ? 'rgba(47,212,232,0.4)' : C.border}`,
+                      color: confFilter === v ? C.signalCyan : C.muted,
+                      fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
+                      textTransform: 'uppercase' as const, letterSpacing: '0.06em',
+                    }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Export */}
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={handleRun}
+              disabled={running}
+              style={{
+                background: running ? 'rgba(47,212,232,0.15)' : C.signalCyan,
+                color: running ? C.dim : C.void,
+                border: 'none', padding: '13px 36px',
+                fontFamily: F.mono,
+                fontWeight: 500, fontSize: '14px', letterSpacing: '0.12em',
+                cursor: running ? 'default' : 'pointer',
+              }}
+            >
+              {running ? '◎ PROCESSING...' : '◎ RUN ACCURACY ANALYSIS'}
+            </button>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{
+              background: C.panel,
+              border: `1px solid rgba(232,163,61,0.3)`,
+              padding: '20px 24px', marginBottom: '20px',
+              fontFamily: F.mono, fontSize: '12px',
+              color: C.flagAmber, letterSpacing: '0.04em', lineHeight: 1.6,
+            }}>
+              <span style={{ fontWeight: 500, letterSpacing: '0.1em' }}>// ERROR  </span>
+              {error}
+            </div>
+          )}
+
+          {/* Empty state — pipeline hasn't settled any picks yet */}
+          {result && result.resolved === 0 && (
+            <div style={{
+              background: C.panel, border: `1px solid ${C.border}`,
+              padding: '44px', marginBottom: '20px', textAlign: 'center',
+            }}>
+              <div style={{
+                fontFamily: F.mono, fontSize: '13px', color: C.dim,
+                letterSpacing: '0.08em', marginBottom: '14px',
+              }}>
+                // no_resolved_picks()
+              </div>
+              <div style={{
+                fontFamily: F.mono, fontSize: '12px', color: C.faint,
+                lineHeight: 1.9, letterSpacing: '0.02em',
+              }}>
+                No resolved picks in this range yet.<br />
+                The backtest runs on real settled picks — results populate as picks are<br />
+                published and games are graded by the result resolver.
+              </div>
               <button
-                onClick={handleExport}
-                disabled={exporting}
+                onClick={() => { setResult(null); setError(null) }}
                 style={{
-                  background: '#a78bfa', color: '#07080E', border: 'none',
-                  padding: '14px 28px', borderRadius: '8px',
-                  fontFamily: F.heading, fontWeight: 800, fontSize: '16px',
-                  letterSpacing: '0.5px', cursor: 'pointer',
+                  marginTop: '24px',
+                  background: 'transparent', color: C.muted,
+                  border: `1px solid ${C.border}`,
+                  padding: '10px 20px',
+                  fontFamily: F.mono, fontSize: '12px',
+                  letterSpacing: '0.08em', cursor: 'pointer',
                 }}
               >
-                📥 EXPORT TO CSV
-              </button>
-              <button
-                onClick={() => setResult(null)}
-                style={{
-                  background: 'transparent', color: C.textMuted,
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  padding: '14px 20px', borderRadius: '8px',
-                  fontFamily: F.heading, fontWeight: 700,
-                  fontSize: '15px', cursor: 'pointer',
-                }}
-              >
-                RESET
+                CLEAR
               </button>
             </div>
-          </>
-        )}
+          )}
+
+          {/* Results — only when resolved picks exist */}
+          {result && result.resolved > 0 && (
+            <>
+              {/* Top-line metrics */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '12px', marginBottom: '20px',
+              }}>
+                {[
+                  { label: 'HIT RATE',       value: `${result.hitRate}%`,           color: C.signalCyan },
+                  { label: 'TOTAL PICKS',    value: result.resolved.toString(),      color: C.platinum  },
+                  { label: 'AVG EDGE',       value: `+${result.avgEdge}%`,           color: C.signalCyan },
+                  { label: 'AVG PROJ ERROR', value: `±${result.avgProjectionError}`, color: C.flagAmber  },
+                ].map(s => (
+                  <div key={s.label} style={{
+                    background: C.panel, border: `1px solid ${C.border}`,
+                    padding: '20px', textAlign: 'center',
+                  }}>
+                    <div style={{
+                      fontFamily: F.mono, fontSize: 'clamp(28px,3vw,40px)',
+                      fontWeight: 500, color: s.color, lineHeight: 1,
+                    }}>
+                      {s.value}
+                    </div>
+                    <div style={{
+                      fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                      letterSpacing: '0.1em', marginTop: '6px',
+                    }}>
+                      {s.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+
+                {/* By confidence */}
+                <div style={{
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  padding: '24px',
+                }}>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.dim,
+                    letterSpacing: '0.12em', marginBottom: '18px',
+                  }}>
+                    BY CONFIDENCE BAND
+                  </div>
+                  {Object.entries(result.byConfidence).map(([conf, data]) => (
+                    <div key={conf} style={{ marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '11px', color: C.muted,
+                          textTransform: 'uppercase' as const,
+                          letterSpacing: '0.08em', fontWeight: 500,
+                        }}>
+                          {conf}
+                        </span>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '12px', fontWeight: 500,
+                          color: rateColor(data.rate),
+                        }}>
+                          {data.rate}% ({data.hits}/{data.total})
+                        </span>
+                      </div>
+                      <RateBar rate={data.rate} color={rateColor(data.rate)} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* By stat */}
+                <div style={{
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  padding: '24px',
+                }}>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.dim,
+                    letterSpacing: '0.12em', marginBottom: '18px',
+                  }}>
+                    BY STAT TYPE
+                  </div>
+                  {Object.entries(result.byStat).map(([stat, data]) => (
+                    <div key={stat} style={{ marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '11px', color: C.muted,
+                          textTransform: 'uppercase' as const,
+                          letterSpacing: '0.08em', fontWeight: 500,
+                        }}>
+                          {stat}
+                        </span>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '12px', fontWeight: 500,
+                          color: rateColor(data.rate),
+                        }}>
+                          {data.rate}% ({data.hits}/{data.total})
+                        </span>
+                      </div>
+                      <RateBar rate={data.rate} color={rateColor(data.rate)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Player variance panels */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+
+                {/* High performers */}
+                <div style={{
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  padding: '24px',
+                }}>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.signalCyan,
+                    letterSpacing: '0.12em', marginBottom: '16px',
+                  }}>
+                    ◆ HIGH VARIANCE CORRELATION
+                  </div>
+                  {result.topPlayers.map((p, i) => (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'center', padding: '9px 0',
+                      borderBottom: i < result.topPlayers.length - 1
+                        ? `1px solid ${C.border}` : 'none',
+                    }}>
+                      <span style={{
+                        fontFamily: F.sans, fontSize: '13px',
+                        fontWeight: 500, color: C.platinum,
+                      }}>
+                        {p.name}
+                      </span>
+                      <span style={{
+                        fontFamily: F.mono, fontSize: '13px',
+                        fontWeight: 500, color: C.signalCyan,
+                        letterSpacing: '0.04em',
+                      }}>
+                        {p.rate}% ({p.hits}/{p.total})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Low performers */}
+                <div style={{
+                  background: C.panel, border: `1px solid ${C.border}`,
+                  padding: '24px',
+                }}>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.flagAmber,
+                    letterSpacing: '0.12em', marginBottom: '16px',
+                  }}>
+                    ⚠ LOW VARIANCE CORRELATION
+                  </div>
+                  {result.weakPlayers.map((p, i) => (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'center', padding: '9px 0',
+                      borderBottom: i < result.weakPlayers.length - 1
+                        ? `1px solid ${C.border}` : 'none',
+                    }}>
+                      <span style={{
+                        fontFamily: F.sans, fontSize: '13px',
+                        fontWeight: 500, color: C.platinum,
+                      }}>
+                        {p.name}
+                      </span>
+                      <span style={{
+                        fontFamily: F.mono, fontSize: '13px',
+                        fontWeight: 500, color: C.flagAmber,
+                        letterSpacing: '0.04em',
+                      }}>
+                        {p.rate}% ({p.hits}/{p.total})
+                      </span>
+                    </div>
+                  ))}
+                  <p style={{
+                    fontFamily: F.mono, fontSize: '11px', color: C.faint,
+                    margin: '14px 0 0', lineHeight: 1.6, letterSpacing: '0.02em',
+                  }}>
+                    These players have edge cases the model doesn&apos;t fully capture.
+                    Apply extra scrutiny before transmitting signals on them.
+                  </p>
+                </div>
+              </div>
+
+              {/* Export */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  style={{
+                    background: C.signalCyan, color: C.void, border: 'none',
+                    padding: '12px 24px',
+                    fontFamily: F.mono, fontWeight: 500, fontSize: '13px',
+                    letterSpacing: '0.1em', cursor: exporting ? 'default' : 'pointer',
+                  }}
+                >
+                  ◎ EXPORT TO CSV
+                </button>
+                <button
+                  onClick={() => { setResult(null); setError(null) }}
+                  style={{
+                    background: 'transparent', color: C.muted,
+                    border: `1px solid ${C.border}`,
+                    padding: '12px 18px',
+                    fontFamily: F.mono, fontWeight: 500,
+                    fontSize: '13px', letterSpacing: '0.08em', cursor: 'pointer',
+                  }}
+                >
+                  RESET
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
