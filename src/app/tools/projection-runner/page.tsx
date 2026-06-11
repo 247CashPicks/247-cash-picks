@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { BRAND } from '@/config/brand'
 import { runProjection, LEAGUE_DEFAULTS } from '@/lib/picks/model'
 import type { ProjectionInputs, ProjectionOutputs } from '@/lib/picks/types'
@@ -317,6 +317,20 @@ export default function ProjectionRunnerPage() {
         setLoadingSuggestions(false)
       }
     }, 250)
+  }, [])
+
+  // Auto-select player from URL params (e.g. ?player=Luka+Dončić&team=LAL from Matchup Builder)
+  // Uses window.location.search instead of useSearchParams() to avoid requiring a Suspense
+  // boundary on a statically pre-rendered page.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const player = params.get('player')
+    const team   = params.get('team')
+    if (player && team) {
+      selectPlayer({ player_name: player, team, position: '' })
+    }
+  // selectPlayer is stable (memoized with stable deps); run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const matchupShare = inputs.matchupShare ?? LEAGUE_DEFAULTS.matchupShare
