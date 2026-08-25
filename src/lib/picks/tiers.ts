@@ -1,7 +1,7 @@
 import type { TierSlug, ToolKey } from './types'
 
 export const TIER_ORDER: TierSlug[] = [
-  'core', 'signal', 'analyst', 'vector', 'nexus'
+  'free', 'core', 'signal', 'analyst', 'vector', 'nexus'
 ]
 
 export function tierIndex(tier: TierSlug): number {
@@ -31,6 +31,13 @@ export function canUseTool(
 }
 
 export const TIER_FEATURES: Record<TierSlug, Record<string, boolean | number | null>> = {
+  free: {
+    daily_signals: false, signals_limit: 0, full_signal_slate: false,
+    accuracy_index: false, projection_viewer: false, projection_runner: false,
+    matchup_builder: false, lineup_adjuster: false, backtester: false,
+    early_access: false, guarantee: false, consulting: false,
+    insider_group: false, raw_export: false, custom_league_avgs: false,
+  },
   core: {
     daily_signals: true, signals_limit: 3, full_signal_slate: false,
     accuracy_index: false, projection_viewer: false, projection_runner: false,

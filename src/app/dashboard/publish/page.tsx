@@ -6,6 +6,13 @@ export const dynamic = 'force-dynamic'
 const C = BRAND.colors
 const F = BRAND.fonts
 
+const NAV = [
+  ['SIGNALS',  '/picks'],
+  ['ENGINE',   '/tools'],
+  ['PIPELINE', '/dashboard'],
+  ['TIERS',    '/join'],
+] as [string, string][]
+
 async function getConfirmedPicks() {
   const supabase = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
@@ -26,211 +33,236 @@ export default async function PublishPage() {
   })
 
   return (
-    <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
+    <div style={{ background: C.void, minHeight: '100vh' }}>
 
-      {/* Header */}
+      {/* Fixed grid bg */}
       <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
-        padding: '28px 40px',
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        backgroundImage: `linear-gradient(rgba(47,212,232,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(47,212,232,0.04) 1px, transparent 1px)`,
+        backgroundSize: '48px 48px',
+      }} />
+
+      {/* Nav */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        height: '56px', background: 'rgba(0,0,0,0.92)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center',
+        padding: '0 clamp(24px,4vw,48px)', gap: '32px',
       }}>
-        <div style={{
-          maxWidth: '900px', margin: '0 auto',
-          display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
+        <a href="/" style={{
+          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+          color: C.signalCyan, letterSpacing: '0.05em', marginRight: 'auto',
         }}>
-          <a href="/dashboard" style={{ color: C.textMuted, textDecoration: 'none', fontSize: '14px' }}>
-            ← Dashboard
+          {BRAND.name}
+        </a>
+        {NAV.map(([label, href]) => (
+          <a key={href} href={href} style={{
+            fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
+            color: href === '/dashboard' ? C.signalCyan : C.dim,
+          }}>
+            {label}
           </a>
-          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-          <h1 style={{
-            fontFamily: F.heading, fontSize: '28px', fontWeight: 900,
-            margin: 0, color: C.accent, letterSpacing: '0.5px',
-          }}>
-            TRANSMIT SIGNALS
-          </h1>
-          <span style={{ fontSize: '14px', color: C.textMuted }}>{today}</span>
-        </div>
-      </div>
+        ))}
+      </nav>
 
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px' }}>
+      <div style={{ position: 'relative', zIndex: 1, paddingTop: '56px' }}>
 
-        {picks.length === 0 ? (
+        {/* Header */}
+        <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '22px clamp(24px,4vw,48px)' }}>
           <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', padding: '64px', textAlign: 'center',
+            maxWidth: '900px', margin: '0 auto',
+            display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>📭</div>
-            <h2 style={{
-              fontFamily: F.heading, fontSize: '28px', fontWeight: 800,
-              margin: '0 0 12px',
-            }}>
-              NO SIGNALS QUEUED
-            </h2>
-            <p style={{ color: C.textMuted, fontSize: '16px', margin: '0 0 24px' }}>
-              Confirm signals in the dashboard before transmitting.
-            </p>
-            <a href="/dashboard" style={{
-              display: 'inline-block', background: C.accent, color: C.text,
-              padding: '12px 28px', borderRadius: '8px',
-              fontFamily: F.heading, fontWeight: 800,
-              fontSize: '15px', letterSpacing: '0.5px',
-              textDecoration: 'none',
-            }}>
-              ← BACK TO DASHBOARD
+            <a href="/dashboard" style={{ fontFamily: F.mono, fontSize: '12px', color: C.muted, letterSpacing: '0.08em' }}>
+              ← DASHBOARD
             </a>
+            <span style={{ color: C.border }}>|</span>
+            <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em' }}>
+              // TRANSMIT SIGNALS
+            </div>
+            <span style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginLeft: 'auto' }}>
+              {today.toUpperCase()}
+            </span>
           </div>
-        ) : (
-          <>
-            {/* Warning */}
-            <div style={{
-              background: 'rgba(251,191,36,0.08)',
-              border: '1px solid rgba(251,191,36,0.3)',
-              borderRadius: '12px', padding: '16px 20px',
-              marginBottom: '28px', fontSize: '14px',
-              color: C.caution, lineHeight: 1.6,
-              display: 'flex', gap: '12px', alignItems: 'flex-start',
-            }}>
-              <span style={{ fontSize: '20px', flexShrink: 0 }}>⚠️</span>
-              <div>
-                <strong>Review carefully before transmitting.</strong> Once transmitted,
-                signals are sent to all qualifying subscribers via dashboard, SMS, and email.
-                This action cannot be undone.
-              </div>
-            </div>
+        </div>
 
-            {/* Signals review */}
-            <div style={{
-              background: C.surface, border: `1px solid ${C.border}`,
-              borderRadius: '16px', overflow: 'hidden', marginBottom: '28px',
-            }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', padding: 'clamp(28px,3vw,44px) clamp(24px,4vw,48px)' }}>
+
+          {picks.length === 0 ? (
+            <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: '64px', textAlign: 'center' }}>
               <div style={{
-                padding: '16px 24px', borderBottom: `1px solid ${C.border}`,
-                background: C.surface2, display: 'flex',
-                justifyContent: 'space-between', alignItems: 'center',
+                fontFamily: F.mono, fontSize: '12px', color: C.dim,
+                letterSpacing: '0.12em', marginBottom: '16px',
               }}>
-                <span style={{
-                  fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-                  letterSpacing: '0.5px',
-                }}>
-                  {picks.length} SIGNAL{picks.length !== 1 ? 'S' : ''} TO TRANSMIT
-                </span>
-                <span style={{ fontSize: '13px', color: C.textMuted }}>
-                  Sorted by display order
-                </span>
+                [ NO SIGNALS QUEUED ]
               </div>
-
-              {picks.map((pick, i) => (
-                <div key={pick.id} style={{
-                  padding: '20px 24px',
-                  borderBottom: i < picks.length - 1
-                    ? `1px solid rgba(255,255,255,0.05)` : 'none',
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 80px 100px 80px 100px 80px',
-                  alignItems: 'center', gap: '12px',
-                  fontSize: '14px',
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '16px' }}>{pick.player_name}</div>
-                    <div style={{ fontSize: '12px', color: C.textMuted, marginTop: '2px' }}>
-                      {pick.team} · {pick.platform}
-                    </div>
-                  </div>
-                  <div style={{
-                    fontFamily: F.heading, fontSize: '18px', fontWeight: 800,
-                    color: pick.stat_type === 'pts' ? C.confirm
-                      : pick.stat_type === 'reb' ? C.signal : C.accentLight,
-                  }}>
-                    {pick.stat_type?.toUpperCase()}
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{
-                      fontFamily: F.heading, fontSize: '24px', fontWeight: 900,
-                      color: pick.direction === 'over' ? C.confirm : C.signal,
-                    }}>
-                      {pick.direction?.toUpperCase()}
-                    </div>
-                    <div style={{ fontSize: '11px', color: C.textMuted }}>Line: {pick.line}</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontWeight: 700, fontSize: '16px' }}>{pick.our_projection}</div>
-                    <div style={{ fontSize: '11px', color: C.textMuted }}>Projection</div>
-                  </div>
-                  <div style={{
-                    textAlign: 'center', padding: '6px 10px',
-                    background: pick.confidence === 'high'
-                      ? 'rgba(52,211,153,0.1)' : 'rgba(56,189,248,0.08)',
-                    border: `1px solid ${pick.confidence === 'high'
-                      ? 'rgba(52,211,153,0.3)' : 'rgba(56,189,248,0.2)'}`,
-                    borderRadius: '8px',
-                    fontSize: '12px', fontWeight: 700,
-                    color: pick.confidence === 'high' ? C.confirm : C.signal,
-                    textTransform: 'uppercase' as const,
-                  }}>
-                    {pick.confidence}
-                  </div>
-                  <div style={{
-                    fontSize: '11px', color: C.textMuted,
-                    textAlign: 'right',
-                  }}>
-                    {pick.tier_required}+
-                  </div>
+              <h2 style={{
+                fontFamily: F.sans, fontSize: 'clamp(18px,2vw,24px)', fontWeight: 500,
+                color: C.platinum, margin: '0 0 10px', letterSpacing: '-0.02em',
+              }}>
+                NO SIGNALS QUEUED
+              </h2>
+              <p style={{ fontFamily: F.mono, color: C.muted, fontSize: '13px', margin: '0 0 24px', lineHeight: 1.6 }}>
+                Confirm signals in the dashboard before transmitting.
+              </p>
+              <a href="/dashboard" style={{
+                display: 'inline-block', background: C.signalCyan, color: C.void,
+                padding: '11px 24px', fontFamily: F.mono, fontWeight: 500,
+                fontSize: '12px', letterSpacing: '0.12em',
+              }}>
+                ← BACK TO DASHBOARD
+              </a>
+            </div>
+          ) : (
+            <>
+              {/* Warning */}
+              <div style={{
+                background: 'rgba(232,163,61,0.05)',
+                border: '1px solid rgba(232,163,61,0.3)',
+                padding: '16px 20px', marginBottom: '24px',
+                fontFamily: F.sans, fontSize: '14px', color: C.flagAmber,
+                lineHeight: 1.6, display: 'flex', gap: '12px', alignItems: 'flex-start',
+              }}>
+                <span style={{ fontFamily: F.mono, fontSize: '13px', flexShrink: 0, letterSpacing: '0.08em' }}>
+                  [!]
+                </span>
+                <div>
+                  <strong>Review carefully before transmitting.</strong> Once transmitted,
+                  signals are sent to all qualifying subscribers via dashboard, SMS, and email.
+                  This action cannot be undone.
                 </div>
-              ))}
-            </div>
-
-            {/* Delivery summary */}
-            <div style={{
-              background: C.surface2, border: `1px solid ${C.border}`,
-              borderRadius: '14px', padding: '20px 24px',
-              marginBottom: '28px', fontSize: '14px',
-              color: C.textMuted, lineHeight: 1.8,
-            }}>
-              <div style={{
-                fontFamily: F.heading, fontSize: '14px', fontWeight: 700,
-                color: '#fff', letterSpacing: '0.5px', marginBottom: '10px',
-              }}>
-                DELIVERY CHANNELS
               </div>
-              <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-                {[
-                  { icon: '📱', label: 'Subscriber dashboard (all tiers)' },
-                  { icon: '📲', label: 'SMS — Twilio (all tiers)' },
-                  { icon: '📧', label: 'Email digest — Resend (all tiers)' },
-                  { icon: '📣', label: 'Herald social post (Instagram + Twitter)' },
-                ].map(d => (
-                  <div key={d.label} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span>{d.icon}</span>
-                    <span>{d.label}</span>
+
+              {/* Signals to transmit */}
+              <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden', marginBottom: '24px' }}>
+                <div style={{
+                  padding: '14px 24px', borderBottom: `1px solid ${C.border}`,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em' }}>
+                    // {picks.length} SIGNAL{picks.length !== 1 ? 'S' : ''} TO TRANSMIT
+                  </div>
+                  <span style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
+                    SORTED BY DISPLAY ORDER
+                  </span>
+                </div>
+
+                {picks.map((pick, i) => (
+                  <div key={pick.id} style={{
+                    padding: '18px 24px',
+                    borderBottom: i < picks.length - 1 ? `1px solid ${C.border}` : 'none',
+                    display: 'grid',
+                    gridTemplateColumns: '2fr 80px 100px 80px 100px 80px',
+                    alignItems: 'center', gap: '12px',
+                  }}>
+                    <div>
+                      <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '15px', color: C.platinum }}>
+                        {pick.player_name}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, marginTop: '2px' }}>
+                        {pick.team} · {pick.platform}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontFamily: F.mono, fontSize: '15px', fontWeight: 500,
+                      color: pick.stat_type === 'pts' ? C.signalCyan
+                        : pick.stat_type === 'reb' ? C.platinum : C.muted,
+                      letterSpacing: '0.06em',
+                    }}>
+                      {pick.stat_type?.toUpperCase()}
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        fontFamily: F.mono, fontSize: '20px', fontWeight: 500,
+                        color: pick.direction === 'over' ? C.signalCyan : C.platinum,
+                        letterSpacing: '0.04em',
+                      }}>
+                        {pick.direction?.toUpperCase()}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>
+                        LINE: {pick.line}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontFamily: F.mono, fontWeight: 500, fontSize: '15px', color: C.platinum }}>
+                        {pick.our_projection}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>PROJ</div>
+                    </div>
+                    <div style={{
+                      textAlign: 'center', padding: '5px 8px',
+                      border: `1px solid ${pick.confidence === 'high' ? C.borderEmphasis : C.border}`,
+                      fontFamily: F.mono, fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em',
+                      color: pick.confidence === 'high' ? C.signalCyan : C.platinum,
+                      textTransform: 'uppercase' as const,
+                    }}>
+                      {pick.confidence}
+                    </div>
+                    <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, textAlign: 'right', letterSpacing: '0.06em' }}>
+                      {pick.tier_required}+
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
 
-            {/* Transmit form */}
-            <form action="/api/picks" method="POST">
-              <input type="hidden" name="action" value="publish_all" />
-              <input type="hidden" name="date"   value={new Date().toISOString().split('T')[0]} />
-              <button
-                type="submit"
-                style={{
-                  width: '100%', background: C.accent, color: C.text,
-                  border: 'none', padding: '20px', borderRadius: '12px',
-                  fontFamily: F.heading, fontWeight: 900, fontSize: '24px',
-                  letterSpacing: '1px', cursor: 'pointer',
-                  boxShadow: '0 0 48px rgba(109,40,217,0.35)',
-                }}
-              >
-                ⚡ TRANSMIT ALL SIGNALS NOW
-              </button>
-              <p style={{
-                textAlign: 'center', fontSize: '13px',
-                color: C.textMuted, margin: '12px 0 0',
+              {/* Delivery summary */}
+              <div style={{
+                background: C.panel, border: `1px solid ${C.border}`,
+                padding: '18px 24px', marginBottom: '24px',
               }}>
-                Signals will be immediately visible to all qualifying subscribers.
-                Herald and Messenger will fire automatically.
-              </p>
-            </form>
-          </>
-        )}
+                <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '12px' }}>
+                  // DELIVERY CHANNELS
+                </div>
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  {[
+                    { tag: 'DASH',  label: 'Subscriber dashboard (all tiers)' },
+                    { tag: 'SMS',   label: 'SMS — Twilio (all tiers)' },
+                    { tag: 'MAIL',  label: 'Email digest — Resend (all tiers)' },
+                    { tag: 'POST',  label: 'Herald social post (Instagram + Twitter)' },
+                  ].map(d => (
+                    <div key={d.tag} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{
+                        fontFamily: F.mono, fontSize: '10px', color: C.signalCyan,
+                        border: `1px solid ${C.borderEmphasis}`, padding: '2px 6px', letterSpacing: '0.08em',
+                      }}>
+                        {d.tag}
+                      </span>
+                      <span style={{ fontFamily: F.sans, fontSize: '13px', color: C.muted }}>
+                        {d.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Transmit form */}
+              <form action="/api/picks" method="POST">
+                <input type="hidden" name="action" value="publish_all" />
+                <input type="hidden" name="date"   value={new Date().toISOString().split('T')[0]} />
+                <button
+                  type="submit"
+                  style={{
+                    width: '100%', background: C.signalCyan, color: C.void,
+                    border: 'none', padding: '20px',
+                    fontFamily: F.mono, fontWeight: 500, fontSize: 'clamp(16px,2vw,22px)',
+                    letterSpacing: '0.12em', cursor: 'pointer',
+                  }}
+                >
+                  TRANSMIT ALL SIGNALS NOW →
+                </button>
+                <p style={{
+                  textAlign: 'center', fontFamily: F.mono, fontSize: '11px',
+                  color: C.faint, margin: '10px 0 0', lineHeight: 1.6, letterSpacing: '0.04em',
+                }}>
+                  Signals will be immediately visible to all qualifying subscribers.
+                  Herald and Messenger will fire automatically.
+                </p>
+              </form>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

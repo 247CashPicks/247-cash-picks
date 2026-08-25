@@ -2,11 +2,19 @@ import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
+import AgentPipeline from './AgentPipeline'
 
 export const dynamic = 'force-dynamic'
 
 const C = BRAND.colors
 const F = BRAND.fonts
+
+const NAV = [
+  ['SIGNALS',  '/picks'],
+  ['ENGINE',   '/tools'],
+  ['PIPELINE', '/dashboard'],
+  ['TIERS',    '/join'],
+] as [string, string][]
 
 async function getDashboardData() {
   const supabase = createServiceClient()
@@ -44,13 +52,13 @@ async function getDashboardData() {
 }
 
 const AGENTS = [
-  { key: 'scout',     label: 'Scout',     icon: '🔍', time: '6:00 AM ET' },
-  { key: 'stats',     label: 'Stats',     icon: '📊', time: '8:00 AM ET' },
-  { key: 'matchup',   label: 'Matchup',   icon: '🔀', time: '9:00 AM ET' },
-  { key: 'defense',   label: 'Defense',   icon: '🛡',  time: '9:30 AM ET' },
-  { key: 'projector', label: 'Projector', icon: '⚡', time: '10:00 AM ET' },
-  { key: 'lines',     label: 'Lines',     icon: '📈', time: '2:00 PM ET' },
-  { key: 'selector',  label: 'Selector',  icon: '✓',  time: '2:30 PM ET' },
+  { key: 'scout',     label: 'Scout',     time: '6:00 AM ET',  glyph: '◈' },
+  { key: 'stats',     label: 'Stats',     time: '8:00 AM ET',  glyph: 'Σ' },
+  { key: 'matchup',   label: 'Matchup',   time: '9:00 AM ET',  glyph: '⬡' },
+  { key: 'defense',   label: 'Defense',   time: '9:30 AM ET',  glyph: '◉' },
+  { key: 'projector', label: 'Projector', time: '10:00 AM ET', glyph: '◆' },
+  { key: 'lines',     label: 'Lines',     time: '2:00 PM ET',  glyph: '↗' },
+  { key: 'selector',  label: 'Selector',  time: '2:30 PM ET',  glyph: '›' },
 ]
 
 export default async function DashboardPage() {
@@ -70,318 +78,269 @@ export default async function DashboardPage() {
   const confirmedCount = selections.filter(s => s.status === 'confirmed').length
 
   return (
-    <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
+    <div style={{ background: C.void, minHeight: '100vh' }}>
 
-      {/* Header */}
+      {/* Fixed grid bg */}
       <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
-        padding: '28px 40px',
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        backgroundImage: `linear-gradient(rgba(47,212,232,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(47,212,232,0.04) 1px, transparent 1px)`,
+        backgroundSize: '48px 48px',
+      }} />
+
+      {/* Nav */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        height: '56px', background: 'rgba(0,0,0,0.92)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center',
+        padding: '0 clamp(24px,4vw,48px)', gap: '32px',
       }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <div style={{
-              fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '2px', marginBottom: '6px',
-            }}>
-              OPERATOR COMMAND CENTER
-            </div>
-            <h1 style={{
-              fontFamily: F.heading, fontSize: '32px', fontWeight: 900,
-              margin: 0, lineHeight: 1,
-            }}>
-              {today}
-            </h1>
-          </div>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div style={{
-              background: C.surface2, border: `1px solid ${C.border}`,
-              borderRadius: '10px', padding: '10px 20px', textAlign: 'center',
-            }}>
-              <div style={{ fontFamily: F.heading, fontSize: '24px', fontWeight: 900, color: C.accentLight }}>
-                {projections.length}
-              </div>
-              <div style={{ fontSize: '11px', color: C.textMuted }}>Projections</div>
-            </div>
-            <div style={{
-              background: C.surface2, border: `1px solid ${C.border}`,
-              borderRadius: '10px', padding: '10px 20px', textAlign: 'center',
-            }}>
-              <div style={{ fontFamily: F.heading, fontSize: '24px', fontWeight: 900, color: C.caution }}>
-                {confirmedCount}
-              </div>
-              <div style={{ fontSize: '11px', color: C.textMuted }}>Ready to Transmit</div>
-            </div>
-            {confirmedCount > 0 && (
-              <a href="/dashboard/publish" style={{
-                display: 'inline-block', background: C.accent, color: C.text,
-                padding: '12px 28px', borderRadius: '8px',
-                fontFamily: F.heading, fontWeight: 800, fontSize: '16px',
-                letterSpacing: '0.5px', textDecoration: 'none',
-                boxShadow: '0 0 24px rgba(109,40,217,0.3)',
-              }}>
-                TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 40px' }}>
-
-        {/* Agent pipeline status */}
-        <div style={{
-          background: C.surface, border: `1px solid ${C.border}`,
-          borderRadius: '16px', padding: '24px', marginBottom: '28px',
+        <a href="/" style={{
+          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+          color: C.signalCyan, letterSpacing: '0.05em', marginRight: 'auto',
         }}>
-          <div style={{
-            fontFamily: F.heading, fontSize: '15px', fontWeight: 800,
-            color: C.accentLight, letterSpacing: '1px', marginBottom: '16px',
+          {BRAND.name}
+        </a>
+        {NAV.map(([label, href]) => (
+          <a key={href} href={href} style={{
+            fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
+            color: href === '/dashboard' ? C.signalCyan : C.dim,
           }}>
-            AGENT PIPELINE
-          </div>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gap: '10px',
-          }}>
-            {AGENTS.map((agent) => (
-              <div key={agent.key} style={{
-                background: C.surface2, borderRadius: '10px',
-                padding: '14px 10px', textAlign: 'center',
-                border: '1px solid rgba(255,255,255,0.06)',
-              }}>
-                <div style={{ fontSize: '20px', marginBottom: '6px' }}>{agent.icon}</div>
-                <div style={{
-                  fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-                  marginBottom: '4px', color: '#fff',
-                }}>
-                  {agent.label.toUpperCase()}
-                </div>
-                <div style={{ fontSize: '10px', color: C.textMuted, marginBottom: '8px' }}>
-                  {agent.time}
-                </div>
-                <a
-                  href={`/api/cron/${agent.key}`}
-                  style={{
-                    display: 'block', background: 'rgba(167,139,250,0.1)',
-                    border: `1px solid rgba(167,139,250,0.2)`,
-                    borderRadius: '6px', padding: '5px 0',
-                    fontSize: '11px', color: C.accentLight,
-                    fontWeight: 700, textDecoration: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  RUN
-                </a>
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      <div style={{ position: 'relative', zIndex: 1, paddingTop: '56px' }}>
+
+        {/* Header */}
+        <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}`, padding: '22px clamp(24px,4vw,48px)' }}>
+          <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div>
+              <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '10px' }}>
+                // OPERATOR COMMAND CENTER
               </div>
-            ))}
+              <h1 style={{
+                fontFamily: F.sans, fontSize: 'clamp(18px,2.2vw,26px)', fontWeight: 500,
+                color: C.platinum, margin: '0 0 6px', lineHeight: 1, letterSpacing: '-0.03em',
+              }}>
+                {today.toUpperCase()}
+              </h1>
+              <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, letterSpacing: '0.04em' }}>
+                {'> dashboard --operator=true --live=true'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: '10px 18px', textAlign: 'center' }}>
+                <div style={{ fontFamily: F.mono, fontSize: 'clamp(18px,2vw,24px)', fontWeight: 500, color: C.platinum, lineHeight: 1 }}>
+                  {projections.length}
+                </div>
+                <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.dim, marginTop: '4px', letterSpacing: '0.08em' }}>PROJECTIONS</div>
+              </div>
+              <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: '10px 18px', textAlign: 'center' }}>
+                <div style={{ fontFamily: F.mono, fontSize: 'clamp(18px,2vw,24px)', fontWeight: 500, color: confirmedCount > 0 ? C.signalCyan : C.muted, lineHeight: 1 }}>
+                  {confirmedCount}
+                </div>
+                <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.dim, marginTop: '4px', letterSpacing: '0.08em' }}>READY TO TRANSMIT</div>
+              </div>
+              {confirmedCount > 0 && (
+                <a href="/dashboard/publish" style={{
+                  display: 'inline-block', background: C.signalCyan, color: C.void,
+                  padding: '12px 24px', fontFamily: F.mono, fontWeight: 500,
+                  fontSize: '13px', letterSpacing: '0.12em',
+                }}>
+                  TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
+                </a>
+              )}
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(24px,2.5vw,36px) clamp(24px,4vw,48px)' }}>
 
-          {/* Projections table */}
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', overflow: 'hidden',
-          }}>
-            <div style={{
-              padding: '18px 24px', borderBottom: `1px solid ${C.border}`,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              background: C.surface2,
-            }}>
-              <span style={{
-                fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-                letterSpacing: '0.5px',
-              }}>
-                TODAY&apos;S PROJECTIONS
-              </span>
-              <span style={{ fontSize: '13px', color: C.textMuted }}>
-                {projections.length} players — sorted by edge
-              </span>
-            </div>
+          <AgentPipeline agents={AGENTS} />
 
-            {/* Table header */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 60px 70px 70px 70px 80px 80px 90px',
-              padding: '10px 20px',
-              background: 'rgba(255,255,255,0.02)',
-              borderBottom: `1px solid ${C.border}`,
-              fontSize: '10px', fontWeight: 700,
-              color: C.textMuted, letterSpacing: '1px',
-            }}>
-              {['PLAYER', 'POS', 'MIN', 'PTS', 'REB', 'AST', 'EDGE', 'ACTION'].map(h => (
-                <div key={h}>{h}</div>
-              ))}
-            </div>
+          <div className="dashboard-layout">
 
-            {projections.length === 0 ? (
+            {/* Projections table */}
+            <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
               <div style={{
-                padding: '48px', textAlign: 'center',
-                color: C.textMuted, fontSize: '15px', lineHeight: 1.7,
+                padding: '14px 20px', borderBottom: `1px solid ${C.border}`,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
-                No projections yet today.<br />
-                Run the Scout agent at 6 AM to begin the pipeline.
+                <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em' }}>
+                  // TODAY&apos;S PROJECTIONS
+                </div>
+                <span style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
+                  {projections.length} PLAYERS — SORTED BY EDGE
+                </span>
               </div>
-            ) : (
-              projections.map((p, i) => {
-                const lineData = lineMap.get(`${p.player_name}_pts`)
-                const edgePct  = lineData?.edge_pct
-                const edgeColor = edgePct
-                  ? edgePct >= 10 ? C.confirm
-                  : edgePct >= 5  ? C.signal
-                  : C.textMuted
-                  : C.textMuted
 
-                return (
-                  <div key={p.id} style={{
-                    display: 'grid',
-                    gridTemplateColumns: '2fr 60px 70px 70px 70px 80px 80px 90px',
-                    padding: '12px 20px',
-                    borderBottom: i < projections.length - 1
-                      ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                    alignItems: 'center', fontSize: '13px',
-                    background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{p.player_name}</div>
-                      <div style={{ fontSize: '11px', color: C.textMuted }}>
-                        {p.team} · {p.is_starter ? 'Starter' : 'Bench'}
+              {/* Table header */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '2fr 60px 70px 70px 70px 80px 80px 90px',
+                padding: '9px 20px', borderBottom: `1px solid ${C.border}`,
+                fontFamily: F.mono, fontSize: '10px', fontWeight: 500,
+                color: C.dim, letterSpacing: '0.1em',
+              }}>
+                {['PLAYER', 'POS', 'MIN', 'PTS', 'REB', 'AST', 'EDGE', 'ACTION'].map(h => (
+                  <div key={h}>{h}</div>
+                ))}
+              </div>
+
+              {projections.length === 0 ? (
+                <div style={{ padding: '48px', textAlign: 'center', fontFamily: F.mono, color: C.muted, fontSize: '13px', lineHeight: 1.7 }}>
+                  No projections yet today.<br />
+                  Run the Scout agent at 6 AM to begin the pipeline.
+                </div>
+              ) : (
+                projections.map((p, i) => {
+                  const lineData = lineMap.get(`${p.player_name}_pts`)
+                  const edgePct  = lineData?.edge_pct
+                  const edgeColor = edgePct != null
+                    ? edgePct >= 10 ? C.signalCyan
+                    : edgePct >= 5  ? C.platinum
+                    : edgePct < 0   ? C.flagAmber
+                    : C.muted
+                    : C.muted
+
+                  return (
+                    <div key={p.id} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '2fr 60px 70px 70px 70px 80px 80px 90px',
+                      padding: '11px 20px',
+                      borderBottom: i < projections.length - 1 ? `1px solid ${C.border}` : 'none',
+                      alignItems: 'center',
+                    }}>
+                      <div>
+                        <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '13px', color: C.platinum }}>
+                          {p.player_name}
+                        </div>
+                        <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim }}>
+                          {p.team} · {p.is_starter ? 'Starter' : 'Bench'}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: F.mono, color: C.muted, fontSize: '12px' }}>{p.position || '—'}</div>
+                      <div style={{ fontFamily: F.mono, fontWeight: 500, color: C.platinum, fontSize: '13px' }}>
+                        {p.projected_minutes?.toFixed(0) || '—'}
+                      </div>
+                      <div style={{ fontFamily: F.mono, color: C.signalCyan, fontWeight: 500, fontSize: '13px' }}>
+                        {p.proj_pts?.toFixed(1) || '—'}
+                      </div>
+                      <div style={{ fontFamily: F.mono, color: C.platinum, fontWeight: 500, fontSize: '13px' }}>
+                        {p.proj_reb?.toFixed(1) || '—'}
+                      </div>
+                      <div style={{ fontFamily: F.mono, color: C.muted, fontWeight: 500, fontSize: '13px' }}>
+                        {p.proj_ast?.toFixed(1) || '—'}
+                      </div>
+                      <div style={{ fontFamily: F.mono, color: edgeColor, fontWeight: 500, fontSize: '12px' }}>
+                        {edgePct != null ? `${edgePct > 0 ? '+' : ''}${edgePct.toFixed(1)}%` : '—'}
+                      </div>
+                      <div>
+                        <form action="/api/picks" method="POST">
+                          <input type="hidden" name="player_name"   value={p.player_name} />
+                          <input type="hidden" name="projection_id" value={p.id} />
+                          <button
+                            type="submit"
+                            style={{
+                              background: 'transparent', border: `1px solid ${C.borderEmphasis}`,
+                              padding: '5px 10px', color: C.signalCyan,
+                              fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
+                              letterSpacing: '0.08em', cursor: 'pointer',
+                            }}
+                          >
+                            + ADD
+                          </button>
+                        </form>
                       </div>
                     </div>
-                    <div style={{ color: C.textMuted, fontSize: '12px' }}>{p.position || '—'}</div>
-                    <div style={{ fontWeight: 600 }}>{p.projected_minutes?.toFixed(0) || '—'}</div>
-                    <div style={{ color: C.confirm,     fontWeight: 700 }}>{p.proj_pts?.toFixed(1) || '—'}</div>
-                    <div style={{ color: C.signal,      fontWeight: 700 }}>{p.proj_reb?.toFixed(1) || '—'}</div>
-                    <div style={{ color: C.accentLight, fontWeight: 700 }}>{p.proj_ast?.toFixed(1) || '—'}</div>
-                    <div style={{ color: edgeColor, fontWeight: 700, fontSize: '12px' }}>
-                      {edgePct ? `${edgePct > 0 ? '+' : ''}${edgePct.toFixed(1)}%` : '—'}
-                    </div>
-                    <div>
-                      <form action="/api/picks" method="POST">
-                        <input type="hidden" name="player_name"    value={p.player_name} />
-                        <input type="hidden" name="projection_id"  value={p.id} />
-                        <button
-                          type="submit"
-                          style={{
-                            background: 'rgba(167,139,250,0.1)',
-                            border: `1px solid rgba(167,139,250,0.25)`,
-                            borderRadius: '6px', padding: '5px 10px',
-                            color: C.accentLight, fontSize: '11px',
-                            fontWeight: 700, cursor: 'pointer',
-                            fontFamily: F.body,
-                          }}
-                        >
-                          + ADD
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-
-          {/* Signal queue */}
-          <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '16px', overflow: 'hidden',
-          }}>
-            <div style={{
-              padding: '18px 20px', borderBottom: `1px solid ${C.border}`,
-              background: C.surface2,
-            }}>
-              <div style={{
-                fontFamily: F.heading, fontSize: '16px', fontWeight: 800,
-                letterSpacing: '0.5px', marginBottom: '4px',
-              }}>
-                SIGNAL QUEUE
-              </div>
-              <div style={{ fontSize: '12px', color: C.textMuted }}>
-                {pendingCount} pending · {confirmedCount} confirmed
-              </div>
+                  )
+                })
+              )}
             </div>
 
-            {selections.length === 0 ? (
-              <div style={{
-                padding: '32px 20px', textAlign: 'center',
-                color: C.textMuted, fontSize: '14px', lineHeight: 1.7,
-              }}>
-                No signals queued yet.<br />
-                Add signals from the projections table.
+            {/* Signal queue */}
+            <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '4px' }}>
+                  // SIGNAL QUEUE
+                </div>
+                <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
+                  {pendingCount} PENDING · {confirmedCount} CONFIRMED
+                </div>
               </div>
-            ) : (
-              <div>
-                {selections.map((s, i) => (
-                  <div key={s.id} style={{
-                    padding: '14px 20px',
-                    borderBottom: i < selections.length - 1
-                      ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                  }}>
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'flex-start', marginBottom: '6px',
-                    }}>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{s.player_name}</div>
-                      <span style={{
-                        fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
-                        color: s.status === 'confirmed' ? C.confirm : C.caution,
-                        background: s.status === 'confirmed'
-                          ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
-                        border: `1px solid ${s.status === 'confirmed'
-                          ? 'rgba(52,211,153,0.25)' : 'rgba(251,191,36,0.25)'}`,
-                        borderRadius: '4px', padding: '2px 8px',
-                        textTransform: 'uppercase' as const,
-                      }}>
-                        {s.status}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '12px', color: C.textMuted, marginBottom: '8px' }}>
-                      {s.stat_type?.toUpperCase()} {s.direction?.toUpperCase()} {s.line}
-                      {' · '}{s.platform}
-                      {s.edge_pct && (
-                        <span style={{ color: C.confirm, fontWeight: 600 }}>
-                          {' '}(+{s.edge_pct.toFixed(1)}% edge)
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <span style={{
-                        fontSize: '10px', color: C.textMuted,
-                        background: 'rgba(255,255,255,0.05)',
-                        borderRadius: '4px', padding: '2px 8px',
-                        textTransform: 'capitalize' as const,
-                      }}>
-                        {s.confidence}
-                      </span>
-                      <span style={{
-                        fontSize: '10px', color: C.textMuted,
-                        background: 'rgba(255,255,255,0.05)',
-                        borderRadius: '4px', padding: '2px 8px',
-                      }}>
-                        {s.tier_required}+
-                      </span>
-                    </div>
-                  </div>
-                ))}
 
-                {confirmedCount > 0 && (
-                  <div style={{ padding: '16px 20px', borderTop: `1px solid ${C.border}` }}>
-                    <a href="/dashboard/publish" style={{
-                      display: 'block', textAlign: 'center',
-                      background: C.accent, color: C.text,
-                      padding: '12px', borderRadius: '8px',
-                      fontFamily: F.heading, fontWeight: 800,
-                      fontSize: '16px', letterSpacing: '0.5px',
-                      textDecoration: 'none',
+              {selections.length === 0 ? (
+                <div style={{ padding: '32px 20px', textAlign: 'center', fontFamily: F.mono, color: C.muted, fontSize: '13px', lineHeight: 1.7 }}>
+                  No signals queued yet.<br />
+                  Add signals from the projections table.
+                </div>
+              ) : (
+                <div>
+                  {selections.map((s, i) => (
+                    <div key={s.id} style={{
+                      padding: '14px 20px',
+                      borderBottom: i < selections.length - 1 ? `1px solid ${C.border}` : 'none',
                     }}>
-                      TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
-                    </a>
-                  </div>
-                )}
-              </div>
-            )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                        <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '14px', color: C.platinum }}>
+                          {s.player_name}
+                        </div>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '10px', fontWeight: 500, letterSpacing: '0.08em',
+                          color: s.status === 'confirmed' ? C.signalCyan : C.flagAmber,
+                          border: `1px solid ${s.status === 'confirmed' ? C.borderEmphasis : 'rgba(232,163,61,0.3)'}`,
+                          padding: '2px 8px',
+                          textTransform: 'uppercase' as const,
+                        }}>
+                          {s.status}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.muted, marginBottom: '8px', letterSpacing: '0.04em' }}>
+                        {s.stat_type?.toUpperCase()} {s.direction?.toUpperCase()} {s.line}
+                        {' · '}{s.platform}
+                        {s.edge_pct && (
+                          <span style={{ color: C.signalCyan, fontWeight: 500 }}>
+                            {' '}(+{s.edge_pct.toFixed(1)}% edge)
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                          border: `1px solid ${C.border}`, padding: '2px 8px',
+                          textTransform: 'capitalize' as const, letterSpacing: '0.06em',
+                        }}>
+                          {s.confidence}
+                        </span>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                          border: `1px solid ${C.border}`, padding: '2px 8px',
+                          letterSpacing: '0.06em',
+                        }}>
+                          {s.tier_required}+
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {confirmedCount > 0 && (
+                    <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.border}` }}>
+                      <a href="/dashboard/publish" style={{
+                        display: 'block', textAlign: 'center',
+                        background: C.signalCyan, color: C.void,
+                        padding: '12px', fontFamily: F.mono, fontWeight: 500,
+                        fontSize: '13px', letterSpacing: '0.12em',
+                      }}>
+                        TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

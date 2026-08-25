@@ -11,6 +11,13 @@ export const dynamic = 'force-dynamic'
 const C = BRAND.colors
 const F = BRAND.fonts
 
+const NAV = [
+  ['SIGNALS',  '/picks'],
+  ['ENGINE',   '/tools'],
+  ['PIPELINE', '/dashboard'],
+  ['TIERS',    '/join'],
+] as [string, string][]
+
 async function getToolUsage(clerkUserId: string) {
   const supabase = createServiceClient()
   const startOfMonth = new Date()
@@ -27,18 +34,17 @@ async function getToolUsage(clerkUserId: string) {
 
 const TOOLS: {
   key: ToolKey
-  icon: string
+  glyph: string
   label: string
   minTier: TierSlug
   minPrice: string
   route: string
   description: string
   details: string[]
-  color: string
 }[] = [
   {
     key: 'projection_runner',
-    icon: '⚡',
+    glyph: '◆',
     label: 'PROJECTION ENGINE',
     minTier: 'analyst',
     minPrice: '$549',
@@ -52,11 +58,10 @@ const TOOLS: {
       'Compare projections to live PrizePicks lines',
       'Save analyses to the lab for future reference',
     ],
-    color: '#818CF8',
   },
   {
     key: 'matchup_builder',
-    icon: '🔀',
+    glyph: '⬡',
     label: 'MATCHUP MATRIX',
     minTier: 'vector',
     minPrice: '$799',
@@ -70,11 +75,10 @@ const TOOLS: {
       'Send assignments directly to Projection Engine',
       'Save matchup sets for recurring games',
     ],
-    color: C.accentLight,
   },
   {
     key: 'lineup_adjuster',
-    icon: '🔧',
+    glyph: '◉',
     label: 'LINEUP CALIBRATOR',
     minTier: 'vector',
     minPrice: '$799',
@@ -88,11 +92,10 @@ const TOOLS: {
       'Flags lineups with fewer than 20 games together',
       'Send adjusted stats to Projection Engine',
     ],
-    color: C.accentLight,
   },
   {
     key: 'backtester',
-    icon: '📊',
+    glyph: '◎',
     label: 'ACCURACY INDEX',
     minTier: 'nexus',
     minPrice: '$1,199',
@@ -106,21 +109,15 @@ const TOOLS: {
       'Identify edge cases and model weaknesses',
       'Export full results to CSV',
     ],
-    color: '#a78bfa',
   },
 ]
-
-function toolBorderRgb(color: string): string {
-  if (color === '#818CF8') return '129,140,248'
-  return '167,139,250'
-}
 
 export default async function ToolsPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
   const wallet = await getWalletForUser(userId)
-  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
+  const tier = (wallet?.tier_slug ?? 'free') as TierSlug
 
   const usage = await getToolUsage(userId)
   const usageCounts: Record<string, number> = {}
@@ -130,165 +127,208 @@ export default async function ToolsPage() {
   const totalRuns = usage.length
 
   return (
-    <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
+    <div style={{ background: C.void, minHeight: '100vh' }}>
 
-      {/* Header */}
+      {/* Fixed grid bg */}
       <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
-        padding: '40px',
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        backgroundImage: `linear-gradient(rgba(47,212,232,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(47,212,232,0.04) 1px, transparent 1px)`,
+        backgroundSize: '48px 48px',
+      }} />
+
+      {/* Nav */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        height: '56px',
+        background: 'rgba(0,0,0,0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center',
+        padding: '0 clamp(24px,4vw,48px)',
+        gap: '32px',
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px',
+        <a href="/" style={{
+          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+          color: C.signalCyan, letterSpacing: '0.05em', textDecoration: 'none',
+          marginRight: 'auto',
+        }}>
+          {BRAND.name}
+        </a>
+        {NAV.map(([label, href]) => (
+          <a key={href} href={href} style={{
+            fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
+            color: href === '/tools' ? C.signalCyan : C.dim,
+            textDecoration: 'none',
           }}>
-            <div>
-              <div style={{
-                fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-                color: C.accentLight, letterSpacing: '2px', marginBottom: '8px',
-              }}>
-                THE LAB
-              </div>
-              <h1 style={{
-                fontFamily: F.heading, fontSize: '40px', fontWeight: 900,
-                margin: 0, lineHeight: 1,
-              }}>
-                ANALYTICAL TOOLS
-              </h1>
-            </div>
+            {label}
+          </a>
+        ))}
+      </nav>
+
+      {/* Content */}
+      <div style={{ position: 'relative', zIndex: 1, paddingTop: '56px' }}>
+
+        {/* Header */}
+        <div style={{
+          background: C.panel,
+          borderBottom: `1px solid ${C.border}`,
+          padding: 'clamp(28px,3vw,44px) clamp(24px,4vw,48px)',
+        }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <div style={{
-              background: C.surface2, border: `1px solid ${C.border}`,
-              borderRadius: '12px', padding: '16px 24px', textAlign: 'right',
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'flex-end', flexWrap: 'wrap', gap: '24px',
             }}>
-              <div style={{
-                fontFamily: F.heading, fontSize: '28px', fontWeight: 900,
-                color: C.accentLight,
-              }}>
-                {totalRuns}
+              <div>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '11px',
+                  color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '10px',
+                }}>
+                  // THE LAB
+                </div>
+                <h1 style={{
+                  fontFamily: F.sans, fontSize: 'clamp(28px,4vw,42px)', fontWeight: 500,
+                  color: C.platinum, margin: '0 0 10px', lineHeight: 1,
+                  letterSpacing: '-0.03em',
+                }}>
+                  ANALYTICAL <span style={{ color: C.signalCyan }}>TOOLS.</span>
+                </h1>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '12px', color: C.faint, letterSpacing: '0.04em',
+                }}>
+                  {'> query_tools --tier='}{tier.toUpperCase()}{' --access=unlocked'}
+                </div>
               </div>
-              <div style={{ fontSize: '12px', color: C.textMuted }}>
-                model executions this month
+
+              <div style={{ borderLeft: `2px solid ${C.signalCyan}`, paddingLeft: '20px' }}>
+                <div style={{
+                  fontFamily: F.mono, fontSize: 'clamp(32px,3.5vw,44px)', fontWeight: 500,
+                  color: C.signalCyan, lineHeight: 1,
+                }}>
+                  {totalRuns}
+                </div>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', color: C.dim,
+                  letterSpacing: '0.1em', marginTop: '4px',
+                }}>
+                  MODEL EXECUTIONS / MONTH
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 40px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-          {TOOLS.map((tool) => {
-            const unlocked = tier ? canUseTool(tier, tool.key) : false
-            const runs = usageCounts[tool.key] || 0
-            const borderRgb = toolBorderRgb(tool.color)
+        {/* Tool cards */}
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(28px,3vw,44px) clamp(24px,4vw,48px)' }}>
+          <div className="tools-grid">
+            {TOOLS.map((tool) => {
+              const unlocked = tier ? canUseTool(tier, tool.key) : false
+              const runs = usageCounts[tool.key] || 0
 
-            return (
-              <div key={tool.key} style={{
-                background: C.surface,
-                border: `1px solid ${unlocked
-                  ? `rgba(${borderRgb},0.3)`
-                  : 'rgba(255,255,255,0.06)'}`,
-                borderRadius: '20px', padding: '36px',
-                position: 'relative', overflow: 'hidden',
-                opacity: unlocked ? 1 : 0.7,
-              }}>
-
-                {/* Locked badge */}
-                {!unlocked && (
-                  <div style={{
-                    position: 'absolute', top: '20px', right: '20px',
-                    background: 'rgba(0,0,0,0.6)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: '100px', padding: '4px 12px',
-                    fontSize: '11px', color: C.textMuted, fontWeight: 600,
-                    letterSpacing: '0.5px',
-                  }}>
-                    🔒 {tool.minTier.toUpperCase()}+ • {tool.minPrice}/mo
-                  </div>
-                )}
-
-                {/* Usage badge */}
-                {unlocked && runs > 0 && (
-                  <div style={{
-                    position: 'absolute', top: '20px', right: '20px',
-                    background: 'rgba(167,139,250,0.1)',
-                    border: `1px solid ${C.border}`,
-                    borderRadius: '100px', padding: '4px 12px',
-                    fontSize: '11px', color: C.accentLight,
-                  }}>
-                    {runs} run{runs !== 1 ? 's' : ''} this month
-                  </div>
-                )}
-
-                <div style={{ fontSize: '40px', marginBottom: '16px' }}>{tool.icon}</div>
-
-                <h2 style={{
-                  fontFamily: F.heading, fontSize: '24px', fontWeight: 900,
-                  color: unlocked ? tool.color : C.textMuted,
-                  margin: '0 0 8px', letterSpacing: '0.5px',
+              return (
+                <div key={tool.key} style={{
+                  background: C.panel,
+                  border: `1px solid ${unlocked ? C.borderEmphasis : C.border}`,
+                  position: 'relative',
+                  padding: '28px',
+                  opacity: unlocked ? 1 : 0.75,
                 }}>
-                  {tool.label}
-                </h2>
-                <p style={{
-                  color: C.textMuted, fontSize: '15px',
-                  margin: '0 0 20px', lineHeight: 1.5,
-                }}>
-                  {tool.description}
-                </p>
 
-                {/* Feature list */}
-                <div style={{ marginBottom: '28px' }}>
-                  {tool.details.map((d, i) => (
-                    <div key={i} style={{
-                      display: 'flex', gap: '10px', alignItems: 'flex-start',
-                      padding: '6px 0',
-                      borderBottom: i < tool.details.length - 1
-                        ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  {/* Corner badge — tier requirement or run count */}
+                  <div style={{
+                    position: 'absolute', top: '16px', right: '16px',
+                    fontFamily: F.mono, fontSize: '10px',
+                    color: unlocked && runs > 0 ? C.signalCyan : C.faint,
+                    letterSpacing: '0.08em',
+                  }}>
+                    {unlocked && runs > 0
+                      ? `${runs} run${runs !== 1 ? 's' : ''} / mo`
+                      : `${tool.minTier.toUpperCase()}+ · ${tool.minPrice}/mo`}
+                  </div>
+
+                  {/* Glyph */}
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '22px',
+                    color: unlocked ? C.signalCyan : C.dim,
+                    marginBottom: '14px', lineHeight: 1,
+                  }}>
+                    {tool.glyph}
+                  </div>
+
+                  {/* Label */}
+                  <h2 style={{
+                    fontFamily: F.sans, fontSize: '17px', fontWeight: 500,
+                    color: unlocked ? C.platinum : C.dim,
+                    margin: '0 0 8px', letterSpacing: '-0.01em',
+                  }}>
+                    {tool.label}
+                  </h2>
+
+                  {/* Description */}
+                  <p style={{
+                    fontFamily: F.sans, color: C.muted, fontSize: '13px',
+                    margin: '0 0 20px', lineHeight: 1.6,
+                  }}>
+                    {tool.description}
+                  </p>
+
+                  {/* Feature list */}
+                  <div style={{ marginBottom: '24px' }}>
+                    {tool.details.map((d, i) => (
+                      <div key={i} style={{
+                        display: 'flex', gap: '9px', alignItems: 'flex-start',
+                        padding: '5px 0',
+                        borderBottom: i < tool.details.length - 1
+                          ? `1px solid ${C.border}` : 'none',
+                      }}>
+                        <span style={{
+                          fontFamily: F.mono,
+                          color: unlocked ? C.signalCyan : C.faint,
+                          fontSize: '13px', flexShrink: 0, marginTop: '1px',
+                        }}>
+                          {unlocked ? '›' : '—'}
+                        </span>
+                        <span style={{
+                          fontFamily: F.sans,
+                          color: unlocked ? C.muted : C.faint,
+                          fontSize: '13px', lineHeight: 1.5,
+                        }}>
+                          {d}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* CTA */}
+                  {unlocked ? (
+                    <a href={tool.route} style={{
+                      display: 'block', textAlign: 'center',
+                      background: C.signalCyan, color: C.void,
+                      padding: '11px',
+                      fontFamily: F.mono, fontWeight: 500,
+                      fontSize: '12px', letterSpacing: '0.12em',
+                      textDecoration: 'none',
                     }}>
-                      <span style={{
-                        color: unlocked ? tool.color : C.textMuted,
-                        fontSize: '14px', flexShrink: 0, marginTop: '1px',
-                      }}>
-                        {unlocked ? '✓' : '—'}
-                      </span>
-                      <span style={{
-                        color: unlocked ? C.textMuted : 'rgba(148,163,184,0.5)',
-                        fontSize: '14px',
-                      }}>
-                        {d}
-                      </span>
-                    </div>
-                  ))}
+                      ENTER →
+                    </a>
+                  ) : (
+                    <a href={`/join?tier=${tool.minTier}`} style={{
+                      display: 'block', textAlign: 'center',
+                      background: 'transparent', color: C.flagAmber,
+                      border: `1px solid rgba(232,163,61,0.3)`,
+                      padding: '11px',
+                      fontFamily: F.mono, fontWeight: 500,
+                      fontSize: '11px', letterSpacing: '0.08em',
+                      textDecoration: 'none',
+                    }}>
+                      UPGRADE TO {tool.minTier.toUpperCase()} TO UNLOCK
+                    </a>
+                  )}
                 </div>
-
-                {unlocked ? (
-                  <a href={tool.route} style={{
-                    display: 'block', textAlign: 'center',
-                    background: tool.color,
-                    color: '#07080E',
-                    padding: '14px', borderRadius: '10px',
-                    fontFamily: F.heading, fontWeight: 800,
-                    fontSize: '16px', letterSpacing: '0.5px',
-                    textDecoration: 'none',
-                  }}>
-                    OPEN {tool.label} →
-                  </a>
-                ) : (
-                  <a href={`/join?tier=${tool.minTier}`} style={{
-                    display: 'block', textAlign: 'center',
-                    background: 'transparent',
-                    color: C.textMuted,
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    padding: '14px', borderRadius: '10px',
-                    fontFamily: F.heading, fontWeight: 800,
-                    fontSize: '16px', letterSpacing: '0.5px',
-                    textDecoration: 'none',
-                  }}>
-                    UPGRADE TO {tool.minTier.toUpperCase()} TO UNLOCK
-                  </a>
-                )}
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>

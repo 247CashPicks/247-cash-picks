@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       credits_balance: 0,
       credits_lifetime: 0,
       credits_used: 0,
-      tier_slug: null,
+      tier_slug: 'free',
       subscription_status: 'inactive',
       referral_code: referralCode,
     })

@@ -1,39 +1,58 @@
 export const BRAND = {
-  slug:         'datanexus',
-  name:         'DataNexus',
-  tagline:      'Model. Analyze. Project.',
-  subTagline:   'The analytics engine serious analysts run on.',
-  domain:       'www.datanexus.ai',
-  supportEmail: 'support@datanexus.ai',
+  slug:         'datanexus',                        // DB KEY — never change, used in all Supabase queries
+  name:         'The Analytics Community',
+  tagline:      'Run the model. Beat the line.',
+  subTagline:   'Not a pick service — the engine itself.',
+  domain:       'theanalyticscommunity.com',
+  supportEmail: 'support@theanalyticscommunity.com',
   supabaseUrl:  'https://pdqyolxcnlbsxenmcxwg.supabase.co',
 
   colors: {
-    primary:      '#07080E',
-    surface:      '#0F1018',
-    surface2:     '#1C1A2E',
-    accent:       '#6D28D9',
-    accentLight:  '#A78BFA',
-    signal:       '#38BDF8',
-    confirm:      '#34D399',
-    alert:        '#F87171',
-    caution:      '#FBBF24',
-    text:         '#F1F0FF',
-    textMuted:    '#94A3B8',
-    border:       'rgba(167, 139, 250, 0.15)',
-    borderStrong: 'rgba(167, 139, 250, 0.35)',
+    // ── Terminal palette (homepage + new components) ──────────────
+    void:           '#000000',                      // primary background — pure black
+    panel:          '#060809',                      // secondary surfaces, footer
+    signalCyan:     '#2FD4E8',                      // THE accent: live/active/positive edge/primary CTA
+    flagAmber:      '#E8A33D',                      // attention only: negative edge, warnings, LIVE pulse
+    platinum:       '#C0CCD6',                      // primary readable text
+    muted:          '#8593A0',                      // secondary text, descriptions
+    dim:            '#5A6672',                      // labels, captions, table headers
+    faint:          '#4A5560',                      // terminal prompt text, lowest-priority hints
+    border:         'rgba(60,180,210,0.12)',         // hairline borders
+    borderEmphasis: 'rgba(60,180,210,0.20)',         // emphasis borders
+    // ── Legacy aliases (interior pages — do not use in new code) ──
+    primary:        '#07080E',
+    surface:        '#0F1018',
+    surface2:       '#1C1A2E',
+    accent:         '#6D28D9',
+    accentLight:    '#A78BFA',
+    signal:         '#38BDF8',
+    confirm:        '#34D399',
+    alert:          '#F87171',
+    caution:        '#FBBF24',
+    text:           '#F1F0FF',
+    textMuted:      '#94A3B8',
+    borderStrong:   'rgba(167, 139, 250, 0.35)',
   },
 
   fonts: {
-    heading: "'Space Grotesk', sans-serif",
-    body:    "'Inter', sans-serif",
-    mono:    "'JetBrains Mono', 'Fira Code', monospace",
+    sans:    "'IBM Plex Sans', sans-serif",
+    mono:    "'IBM Plex Mono', monospace",
+    // legacy aliases for interior pages
+    heading: "'IBM Plex Sans', sans-serif",
+    body:    "'IBM Plex Sans', sans-serif",
   },
 
   tiers: [
     {
+      slug: 'free', label: 'Observer', priceMonthly: 0, stripePriceId: '',
+      mostPopular: false, color: '#5A6672', gem: '○', badge: 'Observer',
+      description: 'Browse the platform and preview the signal feed in teaser mode. No signals or tools access.',
+      picksLimit: 0,
+    },
+    {
       slug: 'core', label: 'Core', priceMonthly: 199, stripePriceId: '',
       mostPopular: false, color: '#34D399', gem: '◈', badge: 'Entry Node',
-      description: 'Daily signal outputs delivered. Your entry point into the DataNexus system.',
+      description: 'Daily signal outputs delivered. Your entry point into the quantitative desk.',
       picksLimit: 3,
     },
     {
@@ -69,10 +88,10 @@ export const BRAND = {
   },
 }
 
-export type TierSlug = 'core' | 'signal' | 'analyst' | 'vector' | 'nexus'
+export type TierSlug = 'free' | 'core' | 'signal' | 'analyst' | 'vector' | 'nexus'
 export type ToolKey  = 'projection_runner' | 'matchup_builder' | 'lineup_adjuster' | 'backtester'
 
-export const TIER_ORDER: TierSlug[] = ['core', 'signal', 'analyst', 'vector', 'nexus']
+export const TIER_ORDER: TierSlug[] = ['free', 'core', 'signal', 'analyst', 'vector', 'nexus']
 
 export function tierIndex(tier: TierSlug): number {
   return TIER_ORDER.indexOf(tier)
@@ -103,6 +122,13 @@ export function getTierByPriceId(priceId: string) {
 }
 
 export const TIER_FEATURES: Record<TierSlug, Record<string, boolean | number | null>> = {
+  free: {
+    daily_signals: false, signals_limit: 0, full_signal_slate: false,
+    accuracy_index: false, projection_viewer: false, projection_runner: false,
+    matchup_builder: false, lineup_adjuster: false, backtester: false,
+    early_access: false, guarantee: false, consulting: false,
+    insider_group: false, raw_export: false, custom_league_avgs: false,
+  },
   core: {
     daily_signals: true, signals_limit: 3, full_signal_slate: false,
     accuracy_index: false, projection_viewer: false, projection_runner: false,

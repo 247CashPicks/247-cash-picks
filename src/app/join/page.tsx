@@ -38,6 +38,7 @@ const KEY_FEATURES = [
 ]
 
 const TIER_FEATURE_MAP: Record<string, Record<string, boolean>> = {
+  free:    {},
   core:    { daily_signals: true, guarantee: true },
   signal:  { daily_signals: true, full_signal_slate: true, accuracy_index: true, projection_viewer: true, guarantee: true },
   analyst: { daily_signals: true, full_signal_slate: true, accuracy_index: true, projection_viewer: true, projection_runner: true, guarantee: true },
@@ -45,265 +46,505 @@ const TIER_FEATURE_MAP: Record<string, Record<string, boolean>> = {
   nexus:   { daily_signals: true, full_signal_slate: true, accuracy_index: true, projection_viewer: true, projection_runner: true, matchup_builder: true, lineup_adjuster: true, backtester: true, early_access: true, guarantee: true, insider_group: true },
 }
 
-function tierRgb(color: string): string {
-  if (color === '#34D399') return '52,211,153'
-  if (color === '#38BDF8') return '56,189,248'
-  if (color === '#818CF8') return '129,140,248'
-  if (color === '#E9D5FF') return '233,213,255'
-  return '167,139,250'
-}
+const navLinks = [
+  ['SIGNALS', '/picks'],
+  ['ENGINE', '/tools'],
+  ['PIPELINE', '/dashboard'],
+  ['TIERS', '/join'],
+]
 
 export default function JoinPage() {
   const [selected, setSelected] = useState<string>('vector')
-
   const selectedTier = BRAND.tiers.find(t => t.slug === selected)!
-  const rgb = tierRgb(selectedTier.color)
+
+  const handleCheckout = async (tierSlug: string) => {
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tierSlug }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        alert(data.error || 'Checkout unavailable. Please try again.')
+      }
+    } catch {
+      alert('Something went wrong. Please try again.')
+    }
+  }
 
   return (
-    <div style={{ background: C.primary, minHeight: '100vh', paddingTop: '64px' }}>
+    <div style={{ background: C.void, minHeight: '100vh', position: 'relative' }}>
 
-      {/* Header */}
+      {/* Faint grid texture — fixed behind all content */}
       <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
-        padding: '48px 40px', textAlign: 'center',
-      }}>
-        <div style={{
-          fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-          color: C.accentLight, letterSpacing: '2px', marginBottom: '12px',
-        }}>
-          ACCESS TIERS
-        </div>
-        <h1 style={{
-          fontFamily: F.heading, fontSize: 'clamp(36px, 5vw, 64px)',
-          fontWeight: 900, lineHeight: 1, margin: '0 0 16px',
-        }}>
-          JOIN DATANEXUS
-        </h1>
-        <p style={{ color: C.textMuted, fontSize: '16px', margin: 0 }}>
-          Monthly billing only. Cancel anytime. Signal Guarantee on all tiers.
-        </p>
-      </div>
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        backgroundImage: [
+          'linear-gradient(rgba(60,180,210,0.04) 1px, transparent 1px)',
+          'linear-gradient(90deg, rgba(60,180,210,0.04) 1px, transparent 1px)',
+        ].join(', '),
+        backgroundSize: '48px 48px',
+      }} />
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 40px' }}>
+      <div style={{ position: 'relative', zIndex: 1 }}>
 
-        {/* Tier selector */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '12px', marginBottom: '40px',
+        {/* ── NAV ─────────────────────────────────────────────────── */}
+        <nav style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.96)', backdropFilter: 'blur(8px)',
+          borderBottom: `1px solid ${C.border}`,
+          height: '56px', padding: '0 40px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '24px',
         }}>
-          {BRAND.tiers.map((tier) => (
-            <button
-              key={tier.slug}
-              onClick={() => setSelected(tier.slug)}
-              style={{
-                background: selected === tier.slug ? C.surface2 : C.surface,
-                border: `2px solid ${selected === tier.slug ? tier.color : 'rgba(255,255,255,0.08)'}`,
-                borderRadius: '16px', padding: '20px 12px', cursor: 'pointer',
-                textAlign: 'center', position: 'relative',
-                transform: selected === tier.slug ? 'scale(1.02)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {tier.mostPopular && (
-                <div style={{
-                  position: 'absolute', top: '-10px', left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: tier.color, color: '#07080E',
-                  fontFamily: F.heading, fontWeight: 900, fontSize: '9px',
-                  padding: '3px 10px', borderRadius: '100px',
-                  whiteSpace: 'nowrap', letterSpacing: '0.5px',
-                }}>
-                  MOST SELECTED
-                </div>
-              )}
-              <div style={{ fontSize: '28px', marginBottom: '8px' }}>{tier.gem}</div>
-              <div style={{
-                fontFamily: F.heading, fontSize: '16px', fontWeight: 900,
-                color: selected === tier.slug ? tier.color : '#fff',
-                letterSpacing: '0.5px',
+          <a href="/" style={{ textDecoration: 'none' }}>
+            <div style={{ fontFamily: F.mono, fontSize: '13px', fontWeight: 500, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <span className="cursor-blink" style={{ color: C.signalCyan, marginRight: '2px' }}>▌</span>
+              <span style={{ color: C.platinum }}>THE_ANALYTICS_</span>
+              <span style={{ color: C.signalCyan }}>COMMUNITY</span>
+            </div>
+          </a>
+          <div style={{ display: 'flex', gap: '28px' }}>
+            {navLinks.map(([label, href]) => (
+              <a key={label} href={href} style={{
+                fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                color: label === 'TIERS' ? C.signalCyan : C.dim,
+                letterSpacing: '0.12em', textDecoration: 'none',
               }}>
-                {tier.label.toUpperCase()}
-              </div>
-              <div style={{
-                fontFamily: F.heading, fontSize: '22px', fontWeight: 900,
-                color: selected === tier.slug ? tier.color : C.textMuted,
-                marginTop: '4px',
-              }}>
-                ${tier.priceMonthly}
-              </div>
-              <div style={{ fontSize: '11px', color: C.textMuted }}>/mo</div>
-            </button>
-          ))}
-        </div>
+                {label}
+              </a>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+              <span className="amber-pulse" style={{
+                display: 'inline-block', width: '5px', height: '5px',
+                borderRadius: '50%', background: C.flagAmber,
+              }} />
+              <span style={{ fontFamily: F.mono, fontSize: '10px', color: C.flagAmber, letterSpacing: '0.1em' }}>
+                LIVE · 14 GAMES
+              </span>
+            </div>
+            <a href="/join" style={{
+              display: 'inline-block',
+              background: C.signalCyan, color: '#000000',
+              padding: '7px 18px', fontFamily: F.mono,
+              fontSize: '10px', fontWeight: 500, letterSpacing: '0.1em',
+              textDecoration: 'none',
+            }}>
+              REQUEST ACCESS →
+            </a>
+          </div>
+        </nav>
 
-        {/* Selected tier detail */}
+        {/* ── PAGE HEADER ─────────────────────────────────────────── */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '32px', alignItems: 'start',
+          maxWidth: '1440px', margin: '0 auto',
+          padding: 'clamp(80px, 10vh, 112px) clamp(24px, 3vw, 48px) clamp(40px, 5vh, 56px)',
+          paddingTop: 'calc(56px + clamp(48px, 6vh, 80px))',
         }}>
-
-          {/* Features list */}
           <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '20px', padding: '36px',
+            fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+            color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '12px',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-              <span style={{ fontSize: '36px' }}>{selectedTier.gem}</span>
-              <div>
-                <div style={{
-                  fontFamily: F.heading, fontSize: '28px', fontWeight: 900,
-                  color: selectedTier.color, letterSpacing: '0.5px',
-                }}>
-                  {selectedTier.label.toUpperCase()}
+            // MEMBERSHIP TIERS
+          </div>
+          <div style={{
+            fontFamily: F.mono, fontSize: '12px', fontWeight: 400,
+            color: C.faint, marginBottom: '24px',
+          }}>
+            &gt; select_tier --billing=monthly
+          </div>
+          <h1 style={{
+            fontFamily: F.sans, fontSize: 'clamp(36px, 5vw, 72px)',
+            fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1.0,
+            margin: '0 0 16px', color: C.platinum,
+          }}>
+            Choose your{' '}
+            <span style={{ color: C.signalCyan }}>access.</span>
+          </h1>
+          <p style={{
+            fontFamily: F.sans, fontSize: '16px', fontWeight: 400,
+            color: C.muted, lineHeight: 1.6, maxWidth: '460px', margin: 0,
+          }}>
+            Not a pick subscription — access to the engine itself.
+            Monthly billing. Signal Guarantee on all tiers.
+          </p>
+        </div>
+
+        {/* ── TIER CARDS ──────────────────────────────────────────── */}
+        <div style={{
+          maxWidth: '1440px', margin: '0 auto',
+          padding: '0 clamp(24px, 3vw, 48px)',
+        }}>
+          <div className="tier-grid">
+            {BRAND.tiers.filter(t => t.slug !== 'free').map((tier, i) => {
+              const isSelected    = selected === tier.slug
+              const isRecommended = tier.mostPopular
+              const includedFeats = KEY_FEATURES.filter(f => TIER_FEATURE_MAP[tier.slug]?.[f])
+              const excludedCount = KEY_FEATURES.length - includedFeats.length
+
+              const borderColor = isRecommended
+                ? C.signalCyan
+                : isSelected
+                ? C.borderEmphasis
+                : C.border
+
+              return (
+                <div
+                  key={tier.slug}
+                  onClick={() => setSelected(tier.slug)}
+                  style={{
+                    background: C.panel,
+                    border: `1px solid ${borderColor}`,
+                    padding: '24px 20px 20px',
+                    cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column',
+                    position: 'relative',
+                  }}
+                >
+                  {/* Recommended badge — occupies space even when absent so alignment holds */}
+                  <div style={{ height: '20px', marginBottom: '12px', display: 'flex', alignItems: 'center' }}>
+                    {isRecommended && (
+                      <div style={{
+                        fontFamily: F.mono, fontSize: '9px', fontWeight: 500,
+                        color: C.signalCyan, letterSpacing: '0.14em',
+                        display: 'flex', alignItems: 'center', gap: '5px',
+                      }}>
+                        <span>●</span> RECOMMENDED
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Index */}
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                    color: C.dim, letterSpacing: '0.1em', marginBottom: '6px',
+                  }}>
+                    0{i + 1}
+                  </div>
+
+                  {/* Tier name */}
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '15px', fontWeight: 500,
+                    color: C.platinum, letterSpacing: '0.08em', marginBottom: '20px',
+                  }}>
+                    {tier.label.toUpperCase()}
+                  </div>
+
+                  {/* Price */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <span style={{
+                      fontFamily: F.mono, fontSize: '34px', fontWeight: 500,
+                      color: C.platinum, letterSpacing: '-0.02em', lineHeight: 1,
+                    }}>
+                      ${tier.priceMonthly}
+                    </span>
+                    <span style={{
+                      fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                      color: C.dim, marginLeft: '4px',
+                    }}>
+                      /month
+                    </span>
+                  </div>
+
+                  {/* Hairline divider */}
+                  <div style={{ borderTop: `1px solid ${C.border}`, marginBottom: '16px' }} />
+
+                  {/* Included features — flex:1 ensures uniform card height in grid */}
+                  <div style={{ flex: 1, marginBottom: '20px' }}>
+                    {includedFeats.map(feat => (
+                      <div key={feat} style={{
+                        display: 'flex', gap: '7px', alignItems: 'baseline',
+                        marginBottom: '7px',
+                      }}>
+                        <span style={{
+                          fontFamily: F.mono, fontSize: '10px',
+                          color: C.signalCyan, flexShrink: 0, lineHeight: '1.5',
+                        }}>›</span>
+                        <span style={{
+                          fontFamily: F.sans, fontSize: '11px', fontWeight: 400,
+                          color: C.muted, lineHeight: 1.4,
+                        }}>
+                          {FEATURE_LABELS[feat]}
+                        </span>
+                      </div>
+                    ))}
+                    {excludedCount > 0 && (
+                      <div style={{
+                        fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                        color: C.faint, letterSpacing: '0.06em', marginTop: '10px',
+                      }}>
+                        +{excludedCount} not included
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CTA */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleCheckout(tier.slug)
+                    }}
+                    style={{
+                      width: '100%',
+                      background: isRecommended ? C.signalCyan : 'transparent',
+                      color: isRecommended ? '#000000' : C.platinum,
+                      border: isRecommended ? 'none' : `1px solid ${C.border}`,
+                      padding: '10px 12px',
+                      fontFamily: F.mono, fontSize: '10px', fontWeight: 500,
+                      letterSpacing: '0.1em', cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    REQUEST ACCESS →
+                  </button>
                 </div>
-                <div style={{ color: C.textMuted, fontSize: '14px' }}>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── SELECTED TIER DETAIL ────────────────────────────────── */}
+        <div style={{
+          maxWidth: '1200px', margin: '0 auto',
+          padding: 'clamp(40px, 5vh, 60px) clamp(24px, 3vw, 48px) clamp(60px, 8vh, 96px)',
+        }}>
+
+          {/* Section label */}
+          <div style={{
+            fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+            color: C.dim, letterSpacing: '0.1em', marginBottom: '8px',
+          }}>
+            // SELECTED TIER DETAILS
+          </div>
+          <div style={{
+            fontFamily: F.mono, fontSize: '12px', fontWeight: 400,
+            color: C.faint, marginBottom: '28px',
+          }}>
+            &gt; inspect_tier --slug={selectedTier.slug}
+          </div>
+
+          <div className="checkout-grid">
+
+            {/* ── Feature list ─────────────────────────────── */}
+            <div style={{
+              background: C.panel,
+              border: `1px solid ${C.border}`,
+              padding: '28px 24px',
+            }}>
+              {/* Tier identity header */}
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                  color: C.dim, letterSpacing: '0.12em', marginBottom: '8px',
+                }}>
+                  // INCLUDED IN {selectedTier.label.toUpperCase()}
+                </div>
+                <div style={{
+                  fontFamily: F.sans, fontSize: '22px', fontWeight: 500,
+                  color: C.platinum, letterSpacing: '-0.02em', marginBottom: '6px',
+                }}>
+                  {selectedTier.label}
+                </div>
+                <div style={{
+                  fontFamily: F.sans, fontSize: '13px', fontWeight: 400,
+                  color: C.muted, lineHeight: 1.55,
+                }}>
                   {selectedTier.description}
                 </div>
               </div>
-            </div>
 
-            <div>
-              {KEY_FEATURES.map((feat) => {
-                const hasIt = !!(TIER_FEATURE_MAP[selectedTier.slug]?.[feat])
-                return (
-                  <div key={feat} style={{
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                    padding: '10px 0',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    opacity: hasIt ? 1 : 0.35,
-                  }}>
-                    <span style={{
-                      width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
-                      background: hasIt ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.05)',
-                      border: `1px solid ${hasIt ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '12px', color: hasIt ? C.confirm : C.textMuted,
+              {/* Feature rows */}
+              <div>
+                {KEY_FEATURES.map((feat, idx) => {
+                  const hasIt = !!(TIER_FEATURE_MAP[selectedTier.slug]?.[feat])
+                  return (
+                    <div key={feat} style={{
+                      display: 'flex', alignItems: 'center', gap: '12px',
+                      padding: '10px 0',
+                      borderBottom: idx < KEY_FEATURES.length - 1
+                        ? `1px solid ${C.border}` : 'none',
+                      opacity: hasIt ? 1 : 0.28,
                     }}>
-                      {hasIt ? '✓' : '—'}
-                    </span>
-                    <span style={{ fontSize: '14px', color: hasIt ? '#fff' : C.textMuted }}>
-                      {FEATURE_LABELS[feat]}
-                    </span>
-                  </div>
-                )
-              })}
+                      <span style={{
+                        fontFamily: F.mono, fontSize: '12px',
+                        color: hasIt ? C.signalCyan : C.dim,
+                        flexShrink: 0, width: '14px', textAlign: 'center',
+                      }}>
+                        {hasIt ? '›' : '—'}
+                      </span>
+                      <span style={{
+                        fontFamily: F.sans, fontSize: '13px', fontWeight: 400,
+                        color: hasIt ? C.platinum : C.dim,
+                        lineHeight: 1.4,
+                      }}>
+                        {FEATURE_LABELS[feat]}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Checkout panel */}
-          <div>
-            <div style={{
-              background: C.surface2,
-              border: `2px solid ${selectedTier.color}`,
-              borderRadius: '20px', padding: '36px',
-              marginBottom: '16px',
-            }}>
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ fontSize: '14px', color: C.textMuted, marginBottom: '8px' }}>
-                  Selected plan
-                </div>
+            {/* ── Checkout panel ───────────────────────────── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+              {/* Main checkout block */}
+              <div style={{
+                background: C.panel,
+                border: `1px solid ${C.borderEmphasis}`,
+                padding: '28px 24px',
+              }}>
+                {/* Prompt */}
                 <div style={{
-                  fontFamily: F.heading, fontSize: '32px', fontWeight: 900,
-                  color: selectedTier.color,
+                  fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+                  color: C.faint, marginBottom: '20px',
                 }}>
-                  {selectedTier.label} — ${selectedTier.priceMonthly}/mo
+                  &gt; checkout --tier={selectedTier.slug} --billing=monthly
+                </div>
+
+                {/* Selected plan */}
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                    color: C.dim, letterSpacing: '0.12em', marginBottom: '8px',
+                  }}>
+                    SELECTED PLAN
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{
+                      fontFamily: F.mono, fontSize: '26px', fontWeight: 500,
+                      color: C.platinum, letterSpacing: '-0.01em', lineHeight: 1,
+                    }}>
+                      {selectedTier.label}
+                    </span>
+                    <span style={{
+                      fontFamily: F.mono, fontSize: '14px', fontWeight: 400,
+                      color: C.dim,
+                    }}>
+                      ${selectedTier.priceMonthly}/mo
+                    </span>
+                  </div>
+                </div>
+
+                {/* Signal Guarantee */}
+                <div style={{
+                  border: `1px solid ${C.border}`,
+                  padding: '12px 14px',
+                  marginBottom: '10px',
+                }}>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
+                    color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '4px',
+                  }}>
+                    // SIGNAL GUARANTEE
+                  </div>
+                  <div style={{
+                    fontFamily: F.sans, fontSize: '12px', fontWeight: 400,
+                    color: C.muted, lineHeight: 1.5,
+                  }}>
+                    If your first signals don&apos;t hit, you receive a full credit. No conditions.
+                  </div>
+                </div>
+
+                {/* 50% off promo — amber is correct here: it's an attention/promo flag */}
+                <div style={{
+                  border: `1px solid rgba(232,163,61,0.22)`,
+                  padding: '10px 14px',
+                  marginBottom: '22px',
+                  background: 'rgba(232,163,61,0.03)',
+                }}>
+                  <span style={{
+                    fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+                    color: C.flagAmber, letterSpacing: '0.08em',
+                  }}>
+                    50% OFF — new members only
+                  </span>
+                </div>
+
+                {/* Checkout button — free tier has no Stripe price, redirect to sign-up instead */}
+                {selectedTier.stripePriceId ? (
+                  <button
+                    style={{
+                      width: '100%',
+                      background: C.signalCyan, color: '#000000',
+                      border: 'none', padding: '14px',
+                      fontFamily: F.mono, fontWeight: 500, fontSize: '12px',
+                      letterSpacing: '0.1em', cursor: 'pointer',
+                    }}
+                    onClick={() => handleCheckout(selectedTier.slug)}
+                  >
+                    ACTIVATE {selectedTier.label.toUpperCase()} →
+                  </button>
+                ) : (
+                  <a
+                    href="/sign-up"
+                    style={{
+                      display: 'block', textAlign: 'center',
+                      background: C.panel, color: C.signalCyan,
+                      border: `1px solid ${C.borderEmphasis}`, padding: '14px',
+                      fontFamily: F.mono, fontWeight: 500, fontSize: '12px',
+                      letterSpacing: '0.1em', textDecoration: 'none',
+                    }}
+                  >
+                    CREATE FREE ACCOUNT →
+                  </a>
+                )}
+
+                <div style={{
+                  textAlign: 'center', marginTop: '10px',
+                  fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                  color: C.faint, letterSpacing: '0.06em',
+                }}>
+                  Secure payment via Stripe · Cancel anytime
                 </div>
               </div>
 
+              {/* Partner promo codes */}
               <div style={{
-                background: 'rgba(52,211,153,0.08)',
-                border: '1px solid rgba(52,211,153,0.2)',
-                borderRadius: '10px', padding: '16px',
-                marginBottom: '24px', fontSize: '14px',
-                color: C.textMuted, lineHeight: 1.6,
+                background: C.panel,
+                border: `1px solid ${C.border}`,
+                padding: '20px 24px',
               }}>
-                🏆 <strong style={{ color: '#fff' }}>Signal Guarantee</strong> included —
-                if your first signals don&apos;t hit, you receive a full credit refund.
-              </div>
-
-              <div style={{
-                background: 'rgba(52,211,153,0.06)',
-                border: '1px solid rgba(52,211,153,0.15)',
-                borderRadius: '10px', padding: '12px 16px',
-                marginBottom: '24px', fontSize: '14px',
-                color: C.confirm, fontWeight: 600, textAlign: 'center',
-              }}>
-                ⚡ 50% OFF your first month — new members only
-              </div>
-
-              <button
-                style={{
-                  width: '100%', background: selectedTier.color,
-                  color: '#07080E',
-                  border: 'none', padding: '18px', borderRadius: '10px',
-                  fontFamily: F.heading, fontWeight: 800, fontSize: '20px',
-                  letterSpacing: '0.5px', cursor: 'pointer',
-                  boxShadow: `0 0 32px rgba(${rgb},0.2)`,
-                }}
-                onClick={async () => {
-                  try {
-                    const res = await fetch('/api/stripe/checkout', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ tierSlug: selectedTier.slug }),
-                    })
-                    const data = await res.json()
-                    if (data.url) {
-                      window.location.href = data.url
-                    } else {
-                      alert(data.error || 'Checkout unavailable. Please try again.')
-                    }
-                  } catch {
-                    alert('Something went wrong. Please try again.')
-                  }
-                }}
-              >
-                Activate {selectedTier.label} Now →
-              </button>
-
-              <p style={{
-                textAlign: 'center', fontSize: '12px',
-                color: C.textMuted, margin: '12px 0 0',
-              }}>
-                Secure payment via Stripe. Cancel anytime.
-              </p>
-            </div>
-
-            {/* Promo codes */}
-            <div style={{
-              background: C.surface, border: `1px solid ${C.border}`,
-              borderRadius: '14px', padding: '20px',
-            }}>
-              <div style={{
-                fontSize: '12px', color: C.textMuted,
-                letterSpacing: '1px', marginBottom: '12px', fontWeight: 700,
-              }}>
-                PARTNER PROMO CODES
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                {[
-                  { platform: 'Underdog',   code: BRAND.promos.underdogCode,   color: C.signal },
-                  { platform: 'PrizePicks', code: BRAND.promos.prizepicksCode, color: C.accentLight },
-                ].map((p) => (
-                  <div key={p.platform} style={{
-                    background: C.surface2, borderRadius: '8px',
-                    padding: '10px 12px', textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: '11px', color: C.textMuted, marginBottom: '4px' }}>
-                      {p.platform}
-                    </div>
-                    <div style={{
-                      fontFamily: F.heading, fontSize: '16px', fontWeight: 900,
-                      color: p.color, letterSpacing: '1px',
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                  color: C.dim, letterSpacing: '0.14em', marginBottom: '14px',
+                }}>
+                  // PARTNER PROMO CODES
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {[
+                    { platform: 'UNDERDOG',   code: BRAND.promos.underdogCode   },
+                    { platform: 'PRIZEPICKS', code: BRAND.promos.prizepicksCode },
+                  ].map(p => (
+                    <div key={p.platform} style={{
+                      border: `1px solid ${C.border}`,
+                      padding: '12px 10px',
+                      textAlign: 'center',
                     }}>
-                      {p.code}
+                      <div style={{
+                        fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
+                        color: C.dim, letterSpacing: '0.12em', marginBottom: '6px',
+                      }}>
+                        {p.platform}
+                      </div>
+                      <div style={{
+                        fontFamily: F.mono, fontSize: '14px', fontWeight: 500,
+                        color: C.platinum, letterSpacing: '0.1em',
+                      }}>
+                        {p.code}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   )

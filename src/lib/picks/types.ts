@@ -1,4 +1,4 @@
-export type TierSlug = 'core' | 'signal' | 'analyst' | 'vector' | 'nexus'
+export type TierSlug = 'free' | 'core' | 'signal' | 'analyst' | 'vector' | 'nexus'
 export type StatType = 'pts' | 'reb' | 'ast' | 'stl' | 'blk' | '3pm' | 'pts_reb_ast'
 export type PickDirection = 'over' | 'under'
 export type PickResult = 'pending' | 'hit' | 'miss' | 'push' | 'void'

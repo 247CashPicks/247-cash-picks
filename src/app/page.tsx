@@ -1,851 +1,796 @@
-'use client'
-
-import { useState } from 'react'
 import { BRAND } from '@/config/brand'
 
 const C = BRAND.colors
 const F = BRAND.fonts
 
+const projections = [
+  { player: 'Luka Dončić',   team: 'LAL', stat: 'PTS', proj: 31.4, line: 28.5, edge: +2.9 },
+  { player: 'Nikola Jokić',  team: 'DEN', stat: 'REB', proj: 13.2, line: 11.5, edge: +1.7 },
+  { player: 'SGA',           team: 'OKC', stat: 'PTS', proj: 28.9, line: 31.5, edge: -2.6 },
+  { player: 'Jayson Tatum',  team: 'BOS', stat: 'AST', proj:  5.8, line:  4.5, edge: +1.3 },
+  { player: 'Giannis A.',    team: 'MIL', stat: 'REB', proj: 11.6, line: 10.5, edge: +1.1 },
+  { player: 'Anthony Davis', team: 'LAL', stat: 'BLK', proj:  2.4, line:  1.5, edge: +0.9 },
+  { player: "De'Aaron Fox",  team: 'SAC', stat: 'PTS', proj: 24.1, line: 26.5, edge: -2.4 },
+]
+
+const instruments = [
+  {
+    id: '01', name: 'PROJECTION ENGINE', tier: 'analyst+',
+    desc: 'Input any player, any game. The model computes Fpace × Fdef × rebound suppression and outputs a projection value with every contributing factor exposed for inspection.',
+  },
+  {
+    id: '02', name: 'MATCHUP MATRIX', tier: 'vector+',
+    desc: 'Assign primary defensive matchups via size data and Cleaning the Glass percentile rankings. Blended by matchup-share weighting. Agent-prefilled before each slate.',
+  },
+  {
+    id: '03', name: 'LINEUP CALIBRATOR', tier: 'vector+',
+    desc: 'Apply shared-floor adjustments for star combinations with fewer than 20 games of co-play data. Conservative bias applied automatically; override with your conviction.',
+  },
+  {
+    id: '04', name: 'BACKTESTER', tier: 'nexus',
+    desc: 'Run the model against any historical slate. Surface accuracy by player, stat category, and matchup type. Export raw output to CSV for external analysis.',
+  },
+  {
+    id: '05', name: 'DAILY SIGNALS', tier: 'core+',
+    desc: 'Operator-reviewed model outputs published before each game slate. High-edge projections confirmed against live lines. Delivered to your dashboard before market movement.',
+  },
+]
+
+const navLinks = [
+  ['SIGNALS', '/picks'],
+  ['ENGINE', '/tools'],
+  ['PIPELINE', '/dashboard'],
+  ['TIERS', '/join'],
+]
+
+const SAMPLE_FEED = [
+  { player: 'L. Dončić',      stat: 'PTS', proj: '31.4', line: '28.5', edge: '+10%' },
+  { player: 'N. Jokić',       stat: 'REB', proj: '13.8', line: '11.5', edge: '+20%' },
+  { player: 'S. Gilgeous-A.', stat: 'PTS', proj: '33.1', line: '30.5', edge: '+8%'  },
+  { player: 'A. Edwards',     stat: 'PTS', proj: '28.7', line: '26.5', edge: '+8%'  },
+  { player: 'T. Haliburton',  stat: 'AST', proj: '9.1',  line: '9.5',  edge: '-4%'  },
+]
+
+// Content duplicated in JSX for seamless translateY(-50%) loop
+const DRIFT_COLUMN = `31.4  28.5
+fpace 0.847
+REB   +1.7
+13.8  11.5
+0.923 fdef
+PTS   33.1
++8%   edge
+AST    9.1
+ 9.5  line
+0.762  adj
+26.5  base
+DEN   +20%
+LAL   fdef
+ 5.3  AST
+0.841 pace
++10%   sig
+28.5  LINE
+PTS   OKC
+REB   MIL
+ -4%  adj
+0.889 blnd
+28.7  proj
+IND   BASE
+33.1   raw
+ +8%  conf
+`
+
 export default function LandingPage() {
-  const [openFaq, setOpenFaq] = useState<number | null>(null)
-
-  const faqs = [
-    {
-      q: 'What is a projection signal?',
-      a: "A projection signal is a statistically-derived output from the DataNexus model — a quantified estimate of a player's performance in a specific statistical category (points, rebounds, assists) for a given game, with a directional recommendation relative to the published market line.",
-    },
-    {
-      q: 'Do I need a data science background to use the tools?',
-      a: 'No. The lab tools are designed so that serious analysts with basic sports knowledge can operate them effectively. The agent pipeline pre-fills all inputs automatically — you review, override where you have better data, and execute the model.',
-    },
-    {
-      q: "Where does the pre-filled data come from?",
-      a: 'Our automated agent pipeline runs every morning ingesting lineup data, per-36 minute statistics, individual pace ratings, and defensive analytics from professional sports data sources. All model inputs are populated before you open the tool.',
-    },
-    {
-      q: "Can I override the model's default inputs?",
-      a: "Yes, at Analyst tier and above. Every input field is editable. Your overrides are logged separately from the agent baseline — you can always compare your adjusted projection against the model's default output.",
-    },
-    {
-      q: 'What are Fpace and Fdef?',
-      a: "Fpace is a blended pace multiplier that combines the opposing defender's individual pace with the offensive player's team pace, weighted by matchup share (30/70 default). Fdef applies the same blending logic to defensive ratings. Together they transform raw per-36 statistics into game-specific projection values.",
-    },
-    {
-      q: 'When are daily signals published?',
-      a: 'Signals are reviewed and published daily before game time — typically by 3:30 PM ET. Vector and Nexus subscribers receive early access.',
-    },
-    {
-      q: 'What sports does the model cover?',
-      a: 'The current engine is calibrated for NBA player performance modeling. Additional league modules are in active development.',
-    },
-    {
-      q: 'What is the Signal Guarantee?',
-      a: 'Every new DataNexus subscriber receives a Signal Guarantee on their initial membership. If the first set of published signals do not resolve favorably, you receive a full credit toward any future membership tier. No conditions. No delays.',
-    },
-  ]
-
-  const recentSignals = [
-    { player: 'Luka Dončić', team: 'LAL', stat: 'PTS', line: 28.5, proj: 31.2, dir: 'OVER', result: 'hit' },
-    { player: 'Nikola Jokić', team: 'DEN', stat: 'REB', line: 11.5, proj: 13.1, dir: 'OVER', result: 'hit' },
-    { player: 'SGA', team: 'OKC', stat: 'PTS', line: 31.5, proj: 29.4, dir: 'UNDER', result: 'hit' },
-    { player: 'Anthony Davis', team: 'LAL', stat: 'PTS', line: 26.5, proj: 28.9, dir: 'OVER', result: 'miss' },
-    { player: 'Jayson Tatum', team: 'BOS', stat: 'AST', line: 4.5, proj: 5.8, dir: 'OVER', result: 'hit' },
-  ]
-
-  const tools = [
-    {
-      key: 'projection_runner',
-      icon: '⚡',
-      label: 'PROJECTION ENGINE',
-      tier: 'Analyst+',
-      price: '$549/mo',
-      desc: 'Input any player, any game. The model outputs Fpace, Fdef, and projection values. Inspect every computed factor.',
-      color: '#818CF8',
-    },
-    {
-      key: 'matchup_builder',
-      icon: '⬡',
-      label: 'MATCHUP MATRIX',
-      tier: 'Vector+',
-      price: '$799/mo',
-      desc: 'Assign primary defensive matchups using size data and Cleaning the Glass defensive percentile rankings.',
-      color: '#A78BFA',
-    },
-    {
-      key: 'lineup_adjuster',
-      icon: '↺',
-      label: 'LINEUP CALIBRATOR',
-      tier: 'Vector+',
-      price: '$799/mo',
-      desc: 'Apply shared-floor adjustments for star combinations with fewer than 20 games together. Conservative bias applied automatically.',
-      color: '#A78BFA',
-    },
-    {
-      key: 'backtester',
-      icon: '◎',
-      label: 'ACCURACY INDEX',
-      tier: 'Nexus',
-      price: '$1,199/mo',
-      desc: 'Run the model against historical data. Surface accuracy by player, stat category, and matchup type. Export to CSV.',
-      color: '#E9D5FF',
-    },
-  ]
-
-  function toolRgb(color: string): string {
-    if (color === '#818CF8') return '129,140,248'
-    if (color === '#A78BFA') return '167,139,250'
-    if (color === '#E9D5FF') return '233,213,255'
-    return '167,139,250'
-  }
-
   return (
-    <div style={{ background: C.primary, minHeight: '100vh', overflowX: 'hidden' }}>
+    <div style={{ background: C.void, minHeight: '100vh', overflowX: 'hidden' }}>
 
-      {/* NAV */}
+      {/* ── NAV ───────────────────────────────────────────────────── */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: 'rgba(7,8,14,0.92)', backdropFilter: 'blur(12px)',
+        background: 'rgba(0,0,0,0.96)', backdropFilter: 'blur(8px)',
         borderBottom: `1px solid ${C.border}`,
-        padding: '0 40px', height: '64px',
+        height: '56px', padding: '0 40px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '24px',
       }}>
-        <div style={{ fontFamily: F.heading, fontSize: '22px', fontWeight: 700, letterSpacing: '0.5px' }}>
-          <span style={{ color: C.accentLight }}>Data</span>
-          <span style={{ color: C.text }}>Nexus</span>
+        {/* Wordmark */}
+        <div style={{ fontFamily: F.mono, fontSize: '13px', fontWeight: 500, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <span className="cursor-blink" style={{ color: C.signalCyan, marginRight: '2px' }}>▌</span>
+          <span style={{ color: C.platinum }}>THE_ANALYTICS_</span>
+          <span style={{ color: C.signalCyan }}>COMMUNITY</span>
         </div>
-        <div style={{ display: 'flex', gap: '32px', fontSize: '14px', fontWeight: 500 }}>
-          {[['Daily Signals', '/picks'], ['Accuracy Index', '/tracker'], ['Lab Tools', '/#tools'], ['Membership', '/#pricing']].map(([label, href]) => (
-            <a key={label} href={href} style={{ color: C.textMuted, textDecoration: 'none' }}>{label}</a>
+
+        {/* Nav links */}
+        <div style={{ display: 'flex', gap: '28px' }}>
+          {navLinks.map(([label, href]) => (
+            <a key={label} href={href} style={{
+              fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+              color: C.dim, letterSpacing: '0.12em', textDecoration: 'none',
+            }}>
+              {label}
+            </a>
           ))}
         </div>
-        <a href="/join" style={{
-          background: C.accent, color: C.text, padding: '10px 24px',
-          borderRadius: '8px', fontFamily: F.heading, fontWeight: 700,
-          fontSize: '14px', letterSpacing: '0.5px', textDecoration: 'none',
-        }}>
-          GET STARTED
-        </a>
+
+        {/* Right side: LIVE indicator + CTA */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+            <span className="amber-pulse" style={{
+              display: 'inline-block', width: '5px', height: '5px',
+              borderRadius: '50%', background: C.flagAmber,
+            }} />
+            <span style={{ fontFamily: F.mono, fontSize: '10px', color: C.flagAmber, letterSpacing: '0.1em' }}>
+              LIVE · 14 GAMES
+            </span>
+          </div>
+          <a href="/join" style={{
+            display: 'inline-block',
+            background: C.signalCyan, color: '#000000',
+            padding: '7px 18px', fontFamily: F.mono,
+            fontSize: '10px', fontWeight: 500, letterSpacing: '0.1em',
+            textDecoration: 'none',
+          }}>
+            REQUEST ACCESS →
+          </a>
+        </div>
       </nav>
 
-      {/* HERO */}
+      {/* ── SECTION 1: HERO (split) ───────────────────────────────── */}
       <section style={{
-        minHeight: '100vh', position: 'relative', overflow: 'hidden',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        paddingTop: '64px',
+        minHeight: '100vh',
+        paddingTop: '56px',
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'stretch',
       }}>
+
+        {/* Background: hairline grid */}
         <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: `linear-gradient(rgba(167,139,250,0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(167,139,250,0.04) 1px, transparent 1px)`,
-          backgroundSize: '60px 60px',
-        }} />
-        <div style={{
-          position: 'absolute', top: '20%', left: '8%',
-          width: '400px', height: '400px',
-          background: 'radial-gradient(circle, rgba(109,40,217,0.08) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }} />
-        <div style={{
-          position: 'absolute', bottom: '20%', right: '8%',
-          width: '300px', height: '300px',
-          background: 'radial-gradient(circle, rgba(56,189,248,0.06) 0%, transparent 70%)',
-          pointerEvents: 'none',
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+          backgroundImage: [
+            'linear-gradient(rgba(60,180,210,0.04) 1px, transparent 1px)',
+            'linear-gradient(90deg, rgba(60,180,210,0.04) 1px, transparent 1px)',
+          ].join(', '),
+          backgroundSize: '48px 48px',
         }} />
 
-        <div style={{ textAlign: 'center', maxWidth: '900px', padding: '0 24px', position: 'relative', zIndex: 1 }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '8px',
-            background: 'rgba(109,40,217,0.1)', border: `1px solid ${C.border}`,
-            borderRadius: '100px', padding: '8px 20px', marginBottom: '32px',
-            fontSize: '13px', fontWeight: 600, color: C.accentLight, letterSpacing: '1px',
-          }}>
-            ⚡ PRECISION SPORTS ANALYTICS PLATFORM
-          </div>
-
-          <h1 style={{
-            fontFamily: F.heading,
-            fontSize: 'clamp(56px, 10vw, 120px)',
-            fontWeight: 700, lineHeight: 0.95,
-            letterSpacing: '-1px', margin: '0 0 8px', color: C.text,
-          }}>
-            MODEL. ANALYZE.
-          </h1>
-          <h1 style={{
-            fontFamily: F.heading,
-            fontSize: 'clamp(56px, 10vw, 120px)',
-            fontWeight: 700, lineHeight: 0.95,
-            letterSpacing: '-1px', margin: '0 0 28px',
-            color: C.accentLight,
-            textShadow: '0 0 60px rgba(167,139,250,0.3)',
-          }}>
-            PROJECT.
-          </h1>
-
-          <p style={{
-            fontSize: '18px', color: C.textMuted,
-            maxWidth: '560px', margin: '0 auto 40px', lineHeight: 1.6,
-          }}>
-            The analytics engine serious analysts run on. Built for precision — not guesswork.
-          </p>
-
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <a href="/join" style={{
-              background: C.accent, color: C.text, padding: '16px 40px',
-              borderRadius: '10px', fontFamily: F.heading, fontWeight: 700,
-              fontSize: '17px', letterSpacing: '0.5px', textDecoration: 'none',
-              boxShadow: '0 0 40px rgba(109,40,217,0.25)',
-            }}>
-              ACCESS THE LAB →
-            </a>
-            <a href="#tools" style={{
-              background: 'transparent', color: C.text, padding: '16px 40px',
-              borderRadius: '10px', fontFamily: F.heading, fontWeight: 600,
-              fontSize: '17px', textDecoration: 'none',
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}>
-              EXPLORE THE TOOLS
-            </a>
-          </div>
-
-          <div style={{
-            display: 'flex', gap: '48px', justifyContent: 'center',
-            flexWrap: 'wrap', marginTop: '64px',
-          }}>
-            {[
-              { value: '73%', label: 'MODEL ACCURACY', color: C.confirm },
-              { value: '2,400+', label: 'SIGNALS OUTPUT', color: C.signal },
-              { value: '5', label: 'ACCESS TIERS', color: C.accentLight },
-            ].map((s) => (
-              <div key={s.label} style={{ textAlign: 'center' }}>
-                <div style={{
-                  fontFamily: F.heading, fontSize: '48px', fontWeight: 700,
-                  color: s.color, lineHeight: 1,
-                }}>
-                  {s.value}
-                </div>
-                <div style={{
-                  fontSize: '11px', color: C.textMuted,
-                  letterSpacing: '1.5px', marginTop: '6px',
-                }}>
-                  {s.label}
-                </div>
+        {/* Background: drifting model-output data streams */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
+          {[
+            { left: '7%',  dur: '52s', delay: '0s'   },
+            { left: '22%', dur: '38s', delay: '-14s'  },
+            { left: '46%', dur: '62s', delay: '-8s'   },
+            { left: '68%', dur: '44s', delay: '-22s'  },
+            { left: '88%', dur: '36s', delay: '-5s'   },
+          ].map((col, i) => (
+            <div key={i} style={{ position: 'absolute', left: col.left, top: 0, opacity: 0.04 }}>
+              <div
+                className="data-drift"
+                style={{
+                  fontFamily: F.mono,
+                  fontSize: '11px',
+                  color: C.faint,
+                  whiteSpace: 'pre',
+                  lineHeight: '2.2em',
+                  userSelect: 'none',
+                  animationDuration: col.dur,
+                  animationDelay: col.delay,
+                }}
+              >
+                {DRIFT_COLUMN + DRIFT_COLUMN}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* TWO PRODUCTS */}
-      <section style={{ padding: '100px 40px', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-          <div style={{
-            fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-            color: C.accentLight, letterSpacing: '2px', marginBottom: '12px',
-          }}>
-            ONE ENGINE. TWO ACCESS LAYERS.
-          </div>
-          <h2 style={{
-            fontFamily: F.heading, fontSize: 'clamp(36px, 5vw, 64px)',
-            fontWeight: 700, lineHeight: 1, margin: 0,
-          }}>
-            SIGNALS DELIVERED.<br />
-            <span style={{ color: C.accentLight }}>MODEL UNLOCKED.</span>
-          </h2>
+            </div>
+          ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-          {/* Signals card */}
+        {/* Split content grid */}
+        <div
+          className="hero-columns"
+          style={{
+            position: 'relative', zIndex: 1,
+            maxWidth: '1600px', width: '100%',
+            margin: '0 auto',
+            padding: '0 clamp(32px, 4vw, 64px)',
+          }}
+        >
+          {/* ── LEFT: manifesto ─────────────────────────────── */}
           <div style={{
-            background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: '20px', padding: '48px', position: 'relative', overflow: 'hidden',
+            display: 'flex', flexDirection: 'column', justifyContent: 'center',
+            padding: 'clamp(64px, 8vh, 96px) clamp(32px, 3vw, 52px) clamp(64px, 8vh, 96px) 0',
           }}>
+
+            {/* Section comment — cyan per spec */}
             <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
-              background: `linear-gradient(90deg, transparent, ${C.confirm}, transparent)`,
-            }} />
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>◎</div>
-            <h3 style={{
-              fontFamily: F.heading, fontSize: '28px', fontWeight: 700,
-              color: C.confirm, letterSpacing: '0.5px', margin: '0 0 16px',
+              fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+              color: C.signalCyan, letterSpacing: '0.12em',
+              marginBottom: '12px',
             }}>
-              DAILY SIGNAL OUTPUT
-            </h3>
-            <p style={{ color: C.textMuted, lineHeight: 1.7, fontSize: '16px', margin: '0 0 24px' }}>
-              Operator-reviewed projection outputs published daily before game time. Model-backed,
-              data-verified, delivered to your dashboard. Zero research required.
+              // PRIVATE NBA QUANTITATIVE DESK
+            </div>
+
+            {/* Terminal prompt */}
+            <div style={{
+              fontFamily: F.mono, fontSize: '12px', fontWeight: 400,
+              color: C.faint, marginBottom: '48px',
+            }}>
+              &gt; init_session --access=by_membership
+            </div>
+
+            {/* Headline */}
+            <h1 style={{
+              fontFamily: F.sans,
+              fontSize: 'clamp(40px, 5.5vw, 82px)',
+              fontWeight: 500, lineHeight: 1.0, letterSpacing: '-0.03em',
+              margin: '0', color: C.platinum,
+            }}>
+              Run the model.
+            </h1>
+            <h1 style={{
+              fontFamily: F.sans,
+              fontSize: 'clamp(40px, 5.5vw, 82px)',
+              fontWeight: 500, lineHeight: 1.0, letterSpacing: '-0.03em',
+              margin: '0 0 40px', color: C.signalCyan,
+            }}>
+              Beat the line.
+            </h1>
+
+            {/* Subcopy */}
+            <p style={{
+              fontFamily: F.sans, fontSize: '17px', fontWeight: 400,
+              color: C.muted, lineHeight: 1.65,
+              maxWidth: '460px', margin: '0 0 40px',
+            }}>
+              Not a pick service — the engine itself. Direct access to the
+              projection model, matchup matrix, lineup calibrator, and backtester.
+              By membership.
             </p>
-            <div style={{
-              background: 'rgba(52,211,153,0.08)', borderRadius: '10px',
-              padding: '16px 20px', marginBottom: '28px',
-              border: '1px solid rgba(52,211,153,0.15)',
-            }}>
-              <div style={{ fontSize: '13px', color: C.textMuted, marginBottom: '4px' }}>Available from</div>
-              <div style={{ fontFamily: F.heading, fontSize: '22px', fontWeight: 700, color: C.confirm }}>
-                Core — $199/month
-              </div>
-            </div>
-            <a href="/join?tier=core" style={{
-              display: 'inline-block', background: C.confirm, color: '#07080E',
-              padding: '12px 28px', borderRadius: '8px', fontFamily: F.heading,
-              fontWeight: 700, fontSize: '16px', letterSpacing: '0.5px',
-              textDecoration: 'none',
-            }}>
-              ACCESS SIGNALS →
-            </a>
-          </div>
 
-          {/* Tools card */}
-          <div style={{
-            background: C.surface2, border: `1px solid rgba(56,189,248,0.3)`,
-            borderRadius: '20px', padding: '48px', position: 'relative', overflow: 'hidden',
-          }}>
+            {/* CTAs */}
             <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
-              background: `linear-gradient(90deg, transparent, ${C.signal}, transparent)`,
-            }} />
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚡</div>
-            <h3 style={{
-              fontFamily: F.heading, fontSize: '28px', fontWeight: 700,
-              color: C.signal, letterSpacing: '0.5px', margin: '0 0 16px',
+              display: 'flex', gap: '12px', alignItems: 'center',
+              flexWrap: 'wrap', marginBottom: '28px',
             }}>
-              THE MODELING TOOLS
-            </h3>
-            <p style={{ color: C.textMuted, lineHeight: 1.7, fontSize: '16px', margin: '0 0 24px' }}>
-              Run the exact projection engine behind every signal. Input any game, any player,
-              any matchup. Inspect Fpace, Fdef, and rebound suppression factors. Build your own
-              analytical conviction.
-            </p>
-            <div style={{
-              background: 'rgba(56,189,248,0.08)', borderRadius: '10px',
-              padding: '16px 20px', marginBottom: '28px',
-              border: '1px solid rgba(56,189,248,0.15)',
-            }}>
-              <div style={{ fontSize: '13px', color: C.textMuted, marginBottom: '4px' }}>Available from</div>
-              <div style={{ fontFamily: F.heading, fontSize: '22px', fontWeight: 700, color: C.signal }}>
-                Analyst — $549/month
-              </div>
-            </div>
-            <a href="/join?tier=analyst" style={{
-              display: 'inline-block', background: C.signal, color: '#07080E',
-              padding: '12px 28px', borderRadius: '8px', fontFamily: F.heading,
-              fontWeight: 700, fontSize: '16px', letterSpacing: '0.5px',
-              textDecoration: 'none',
-            }}>
-              OPEN THE LAB →
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section style={{
-        padding: '100px 40px',
-        background: C.surface,
-        borderTop: `1px solid ${C.border}`,
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-            <div style={{
-              fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '2px', marginBottom: '12px',
-            }}>
-              THE PIPELINE
-            </div>
-            <h2 style={{
-              fontFamily: F.heading, fontSize: 'clamp(36px, 5vw, 60px)',
-              fontWeight: 700, lineHeight: 1, margin: 0,
-            }}>
-              HOW THE ENGINE<br /><span style={{ color: C.accentLight }}>PRODUCES SIGNAL</span>
-            </h2>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-            {[
-              { n: '01', icon: '⬡', title: 'DATA INGESTION', color: C.accentLight, desc: 'Agent pipeline ingests lineups, per-36 stats, pace data, defensive ratings, and matchup variables across the full game slate every morning.' },
-              { n: '02', icon: '⚡', title: 'MODEL EXECUTION', color: C.signal, desc: 'The projection engine runs Fpace × Fdef × rebound suppression across all active players. Lineup combination adjustments applied where flagged.' },
-              { n: '03', icon: '◎', title: 'SIGNAL OUTPUT', color: C.confirm, desc: 'Operator reviews model outputs against live lines. High-edge projections confirmed and published as daily signals before market movement.' },
-              { n: '04', icon: '◈', title: 'SELF-SERVE ANALYSIS', color: '#E9D5FF', desc: 'Analyst+ subscribers run the same engine independently. Override any input, inspect every factor, develop conviction the model alone cannot give you.' },
-            ].map((step) => (
-              <div key={step.n} style={{
-                background: C.primary, border: `1px solid ${C.border}`,
-                borderRadius: '16px', padding: '32px', position: 'relative', overflow: 'hidden',
+              <a href="/join" style={{
+                display: 'inline-block',
+                background: C.signalCyan, color: '#000000',
+                padding: '12px 28px', fontFamily: F.mono,
+                fontSize: '11px', fontWeight: 500, letterSpacing: '0.1em',
+                textDecoration: 'none',
               }}>
-                <div style={{
-                  position: 'absolute', top: '-16px', right: '-8px',
-                  fontFamily: F.heading, fontSize: '100px', fontWeight: 700,
-                  color: 'rgba(255,255,255,0.03)', lineHeight: 1,
-                }}>
-                  {step.n}
-                </div>
-                <div style={{ fontSize: '36px', marginBottom: '16px' }}>{step.icon}</div>
-                <h3 style={{
-                  fontFamily: F.heading, fontSize: '17px', fontWeight: 700,
-                  color: step.color, margin: '0 0 12px', letterSpacing: '0.5px',
-                }}>
-                  {step.title}
-                </h3>
-                <p style={{ color: C.textMuted, lineHeight: 1.7, fontSize: '14px', margin: 0 }}>
-                  {step.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* TOOLS SHOWCASE */}
-      <section id="tools" style={{ padding: '100px 40px', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-          <div style={{
-            fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-            color: C.accentLight, letterSpacing: '2px', marginBottom: '12px',
-          }}>
-            THE LAB
-          </div>
-          <h2 style={{
-            fontFamily: F.heading, fontSize: 'clamp(36px, 5vw, 60px)',
-            fontWeight: 700, lineHeight: 1, margin: '0 0 16px',
-          }}>
-            FOUR INSTRUMENTS.<br />
-            <span style={{ color: C.accentLight }}>ONE EDGE.</span>
-          </h2>
-          <p style={{ color: C.textMuted, fontSize: '16px', maxWidth: '520px', margin: '0 auto', lineHeight: 1.6 }}>
-            The same modeling toolkit the operator uses to generate daily signals —
-            now available to serious analysts.
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          {tools.map((tool) => {
-            const rgb = toolRgb(tool.color)
-            return (
-              <div key={tool.key} style={{
-                background: C.surface, borderRadius: '16px', padding: '36px',
-                border: `1px solid rgba(${rgb},0.2)`,
-                position: 'relative', overflow: 'hidden',
+                REQUEST ACCESS →
+              </a>
+              <a href="#engine" style={{
+                display: 'inline-block',
+                background: 'transparent', color: C.platinum,
+                padding: '11px 28px', fontFamily: F.mono,
+                fontSize: '11px', fontWeight: 400, letterSpacing: '0.1em',
+                textDecoration: 'none',
+                border: `1px solid ${C.border}`,
               }}>
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  background: `rgba(${rgb},0.1)`,
-                  border: `1px solid rgba(${rgb},0.25)`,
-                  borderRadius: '100px', padding: '4px 12px',
-                  fontSize: '12px', fontWeight: 600, color: tool.color,
-                  letterSpacing: '0.5px', marginBottom: '20px',
-                }}>
-                  {tool.tier} · {tool.price}
-                </div>
-                <div style={{ fontSize: '36px', marginBottom: '16px' }}>{tool.icon}</div>
-                <h3 style={{
-                  fontFamily: F.heading, fontSize: '22px', fontWeight: 700,
-                  color: tool.color, margin: '0 0 12px', letterSpacing: '0.5px',
-                }}>
-                  {tool.label}
-                </h3>
-                <p style={{ color: C.textMuted, lineHeight: 1.7, fontSize: '15px', margin: 0 }}>
-                  {tool.desc}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ACCURACY INDEX PREVIEW */}
-      <section style={{
-        padding: '100px 40px',
-        background: C.surface,
-        borderTop: `1px solid ${C.border}`,
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'center' }}>
-          <div>
-            <div style={{
-              fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '2px', marginBottom: '12px',
-            }}>
-              MODEL PERFORMANCE
+                VIEW THE ENGINE
+              </a>
             </div>
-            <h2 style={{
-              fontFamily: F.heading, fontSize: 'clamp(36px, 4vw, 52px)',
-              fontWeight: 700, lineHeight: 1, margin: '0 0 20px',
+
+            {/* Spec line */}
+            <div style={{
+              fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+              color: C.dim, letterSpacing: '0.1em',
             }}>
-              No Hype.<br /><span style={{ color: C.accentLight }}>Just Data.</span>
-            </h2>
-            <p style={{ color: C.textMuted, fontSize: '16px', lineHeight: 1.7, margin: '0 0 32px' }}>
-              Every signal. Every resolution. Every variance from projection to actual.
-              Full transparency — no cherry-picking, no selective reporting.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '32px' }}>
-              {[
-                { v: '73%', l: 'RESOLUTION ACCURACY', c: C.confirm },
-                { v: '4 Mo.', l: 'CONSECUTIVE ACCURACY', c: C.signal },
-                { v: '100%', l: 'TRANSPARENT OUTPUT', c: C.accentLight },
-              ].map((s) => (
-                <div key={s.l} style={{
-                  background: C.primary, border: `1px solid ${C.border}`,
-                  borderRadius: '12px', padding: '16px', textAlign: 'center',
+              07-AGENT PIPELINE · 05 INSTRUMENTS · 240+ PTS/SLATE · 06:00 REFRESH
+            </div>
+          </div>
+
+          {/* ── RIGHT: sample projection feed ───────────────── */}
+          <div
+            className="hero-right-panel"
+            style={{
+              background: 'rgba(6,8,9,0.6)',
+              display: 'flex', flexDirection: 'column', justifyContent: 'center',
+              padding: 'clamp(48px, 6vh, 80px) clamp(28px, 3vw, 52px)',
+            }}
+          >
+            {/* Feed header */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              marginBottom: '16px',
+            }}>
+              <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
+                &gt; sample_feed --slate=tonight
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                <span style={{
+                  display: 'inline-block', width: '5px', height: '5px',
+                  borderRadius: '50%', background: C.flagAmber,
+                }} />
+                <span style={{
+                  fontFamily: F.mono, fontSize: '10px',
+                  color: C.flagAmber, letterSpacing: '0.1em',
                 }}>
-                  <div style={{ fontFamily: F.heading, fontSize: '28px', fontWeight: 700, color: s.c }}>
-                    {s.v}
-                  </div>
-                  <div style={{ fontSize: '10px', color: C.textMuted, marginTop: '4px', letterSpacing: '0.5px' }}>{s.l}</div>
+                  SAMPLE
+                </span>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div style={{ border: `1px solid ${C.border}` }}>
+
+              {/* Column headers */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 40px 56px 56px 54px',
+                padding: '8px 16px',
+                borderBottom: `1px solid ${C.borderEmphasis}`,
+                fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
+                color: C.dim, letterSpacing: '0.14em',
+                background: 'rgba(6,8,9,0.8)',
+              }}>
+                <span>PLAYER</span>
+                <span style={{ textAlign: 'center' }}>STAT</span>
+                <span style={{ textAlign: 'right' }}>PROJ</span>
+                <span style={{ textAlign: 'right' }}>LINE</span>
+                <span style={{ textAlign: 'right' }}>EDGE</span>
+              </div>
+
+              {/* Static sample rows */}
+              {SAMPLE_FEED.map((row, i) => (
+                <div key={i} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 40px 56px 56px 54px',
+                  padding: '10px 16px',
+                  borderBottom: i < SAMPLE_FEED.length - 1 ? `1px solid ${C.border}` : 'none',
+                  fontFamily: F.mono, fontSize: '12px', fontWeight: 400,
+                  background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)',
+                }}>
+                  <span style={{ color: C.platinum }}>{row.player}</span>
+                  <span style={{ color: C.dim, textAlign: 'center' }}>{row.stat}</span>
+                  <span style={{ color: C.signalCyan, textAlign: 'right' }}>{row.proj}</span>
+                  <span style={{ color: C.muted, textAlign: 'right' }}>{row.line}</span>
+                  <span style={{
+                    textAlign: 'right', fontWeight: 500,
+                    color: row.edge.startsWith('-') ? C.flagAmber : C.signalCyan,
+                  }}>
+                    {row.edge}
+                  </span>
                 </div>
               ))}
             </div>
-            <a href="/tracker" style={{
-              display: 'inline-block', background: C.accent, color: C.text,
-              padding: '14px 32px', borderRadius: '8px', fontFamily: F.heading,
-              fontWeight: 700, fontSize: '16px', letterSpacing: '0.5px',
-              textDecoration: 'none',
-            }}>
-              VIEW ACCURACY INDEX →
-            </a>
-          </div>
 
-          {/* Recent signals table */}
-          <div style={{
-            background: C.primary, border: `1px solid ${C.border}`,
-            borderRadius: '16px', overflow: 'hidden',
-          }}>
+            {/* Honest footer */}
             <div style={{
-              padding: '16px 20px', borderBottom: `1px solid ${C.border}`,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
+              color: C.faint, letterSpacing: '0.08em',
+              textAlign: 'right', marginTop: '10px',
             }}>
-              <span style={{ fontFamily: F.heading, fontWeight: 700, fontSize: '15px', letterSpacing: '0.5px' }}>
-                RECENT SIGNALS
-              </span>
-              <span style={{ fontSize: '12px', color: C.accentLight }}>● LIVE</span>
+              sample slate · representative output
             </div>
-            {recentSignals.map((p, i) => (
-              <div key={i} style={{
-                padding: '14px 20px',
-                borderBottom: i < recentSignals.length - 1 ? `1px solid rgba(255,255,255,0.06)` : 'none',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {p.player}
-                  </div>
-                  <div style={{ fontSize: '12px', color: C.textMuted }}>
-                    {p.team} · {p.stat} {p.dir} {p.line}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{
-                    fontFamily: F.heading, fontSize: '16px', fontWeight: 700,
-                    color: p.dir === 'OVER' ? C.confirm : C.signal,
-                  }}>
-                    {p.dir}
-                  </div>
-                  <div style={{ fontSize: '11px', color: C.textMuted }}>Proj: {p.proj}</div>
-                </div>
-                <div style={{
-                  width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                  background: p.result === 'hit' ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)',
-                  border: `1px solid ${p.result === 'hit' ? 'rgba(52,211,153,0.4)' : 'rgba(248,113,113,0.4)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '16px', color: p.result === 'hit' ? C.confirm : C.alert,
-                }}>
-                  {p.result === 'hit' ? '✓' : '✗'}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
 
-      {/* PRICING */}
-      <section id="pricing" style={{ padding: '100px 40px' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-            <div style={{
-              fontFamily: F.heading, fontSize: '13px', fontWeight: 700,
-              color: C.accentLight, letterSpacing: '2px', marginBottom: '12px',
-            }}>
-              ACCESS TIERS
-            </div>
-            <h2 style={{
-              fontFamily: F.heading, fontSize: 'clamp(36px, 5vw, 60px)',
-              fontWeight: 700, lineHeight: 1, margin: '0 0 16px',
-            }}>
-              THE HIGHER YOUR TIER —<br />
-              <span style={{ color: C.accentLight }}>THE DEEPER YOUR ACCESS</span>
-            </h2>
-            <p style={{ color: C.textMuted, fontSize: '16px', margin: 0 }}>
-              Monthly billing only. Cancel anytime.
-            </p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
-            {BRAND.tiers.map((tier) => (
-              <div key={tier.slug} style={{
-                background: tier.mostPopular ? C.surface2 : C.surface,
-                border: `2px solid ${tier.mostPopular ? '#A78BFA' : 'rgba(255,255,255,0.08)'}`,
-                borderRadius: '20px', padding: '28px 20px', textAlign: 'center',
-                position: 'relative',
-                transform: tier.mostPopular ? 'scale(1.04)' : 'none',
-                boxShadow: tier.mostPopular ? '0 0 40px rgba(167,139,250,0.12)' : 'none',
-              }}>
-                {tier.mostPopular && (
-                  <div style={{
-                    position: 'absolute', top: '-13px', left: '50%',
-                    transform: 'translateX(-50%)',
-                    background: '#A78BFA', color: '#07080E',
-                    fontFamily: F.heading, fontWeight: 700, fontSize: '11px',
-                    padding: '4px 16px', borderRadius: '100px',
-                    whiteSpace: 'nowrap', letterSpacing: '1px',
-                  }}>
-                    ◈ MOST SELECTED
-                  </div>
-                )}
-                <div style={{ fontSize: '32px', marginBottom: '12px' }}>{tier.gem}</div>
-                <div style={{
-                  fontFamily: F.heading, fontSize: '20px', fontWeight: 700,
-                  color: tier.color, letterSpacing: '1px', marginBottom: '4px',
-                }}>
-                  {tier.label.toUpperCase()}
-                </div>
-                <div style={{
-                  fontFamily: F.heading, fontSize: '44px', fontWeight: 700,
-                  lineHeight: 1, margin: '12px 0 4px',
-                }}>
-                  ${tier.priceMonthly}
-                </div>
-                <div style={{ fontSize: '13px', color: C.textMuted, marginBottom: '20px' }}>/month</div>
-                <div style={{ fontSize: '13px', color: C.textMuted, marginBottom: '24px', lineHeight: 1.5, minHeight: '60px' }}>
-                  {tier.description}
-                </div>
-                <a href={`/join?tier=${tier.slug}`} style={{
-                  display: 'block', background: tier.mostPopular ? '#A78BFA' : 'transparent',
-                  color: tier.slug === 'nexus'
-                    ? '#07080E'
-                    : tier.mostPopular ? '#07080E' : '#F1F0FF',
-                  border: `1px solid ${tier.color}`,
-                  padding: '12px', borderRadius: '8px', fontFamily: F.heading,
-                  fontWeight: 700, fontSize: '14px', letterSpacing: '0.5px',
-                  textDecoration: 'none',
-                }}>
-                  Activate {tier.label} →
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* GUARANTEE */}
-      <section style={{ padding: '80px 40px' }}>
-        <div style={{
-          maxWidth: '800px', margin: '0 auto',
-          background: C.surface2, borderRadius: '20px',
-          border: '1px solid rgba(167,139,250,0.3)',
-          padding: '56px', textAlign: 'center', position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-            background: `linear-gradient(90deg, transparent, ${C.accentLight}, transparent)`,
-          }} />
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>◎</div>
-          <h2 style={{
-            fontFamily: F.heading, fontSize: '36px', fontWeight: 700,
-            margin: '0 0 16px', lineHeight: 1,
-          }}>
-            THE DATANEXUS SIGNAL GUARANTEE
-          </h2>
-          <p style={{ color: C.accentLight, fontSize: '16px', margin: '0 0 20px', fontWeight: 600 }}>
-            Your first session is protected.
-          </p>
-          <p style={{ color: C.textMuted, fontSize: '16px', lineHeight: 1.7, margin: '0 0 16px' }}>
-            Every new DataNexus member receives our Signal Guarantee on initial access. If your
-            first set of published signals do not resolve in your favor, you receive a full credit
-            toward any future membership tier.
-          </p>
-          <p style={{ fontSize: '16px', fontWeight: 600, margin: 0, color: C.text, lineHeight: 1.5 }}>
-            We do not gamble with your trust. We model it.
-          </p>
-        </div>
-      </section>
-
-      {/* TESTIMONIALS */}
+      {/* ── SECTION 2: LIVE PROJECTION FEED ──────────────────────── */}
       <section style={{
-        padding: '80px 40px',
-        background: C.surface,
+        padding: '100px 40px',
         borderTop: `1px solid ${C.border}`,
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-            <h2 style={{
-              fontFamily: F.heading, fontSize: 'clamp(28px, 4vw, 44px)',
-              fontWeight: 700, margin: 0, color: C.text,
-            }}>
-              OPERATOR VERIFIED. ANALYST APPROVED.
-            </h2>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+
+          {/* Terminal prompt header */}
+          <div style={{
+            fontFamily: F.mono, fontSize: '13px', fontWeight: 400,
+            color: C.faint, marginBottom: '6px',
+          }}>
+            &gt; live_projection_feed --slate=tonight --source=model_v4
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-            {[
-              { name: 'David M.', tier: 'Core Subscriber', initial: 'D', color: C.confirm, quote: "The signal output has been remarkably consistent. I started at Core, verified the accuracy over four months, and never looked back." },
-              { name: 'Priya S.', tier: 'Vector Subscriber', initial: 'P', color: C.signal, quote: "The Matchup Matrix changed how I analyze games entirely. I can see exactly why a projection carries edge — not just accept someone else's output." },
-              { name: 'Vishal K.', tier: 'Nexus Subscriber', initial: 'V', color: C.accentLight, quote: "The Accuracy Index gave me 30 historical data points to verify before subscribing. The model's variance patterns are exactly what you want to see." },
-            ].map((t) => (
-              <div key={t.name} style={{
-                background: C.primary, border: `1px solid ${C.border}`,
-                borderRadius: '16px', padding: '28px',
+          <div style={{
+            fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+            color: C.dim, marginBottom: '32px', letterSpacing: '0.04em',
+          }}>
+            [06:14:23] fetching... done. 14 games loaded. 7 high-edge projections.
+          </div>
+
+          {/* Table container */}
+          <div style={{ border: `1px solid ${C.border}` }}>
+
+            {/* Table header bar */}
+            <div style={{
+              background: C.panel,
+              borderBottom: `1px solid ${C.borderEmphasis}`,
+              padding: '10px 20px',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.dim, letterSpacing: '0.12em' }}>
+                MODEL OUTPUT · projection_feed.log
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="amber-pulse" style={{
+                  display: 'inline-block', width: '5px', height: '5px',
+                  borderRadius: '50%', background: C.flagAmber,
+                }} />
+                <span style={{ fontFamily: F.mono, fontSize: '10px', color: C.flagAmber, letterSpacing: '0.1em' }}>
+                  LIVE
+                </span>
+              </div>
+            </div>
+
+            {/* Column headers */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 52px 52px 68px 68px 72px',
+              padding: '8px 20px',
+              borderBottom: `1px solid ${C.border}`,
+              fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+              color: C.dim, letterSpacing: '0.12em',
+            }}>
+              <span>PLAYER</span>
+              <span>TEAM</span>
+              <span>STAT</span>
+              <span style={{ textAlign: 'right' }}>PROJ</span>
+              <span style={{ textAlign: 'right' }}>LINE</span>
+              <span style={{ textAlign: 'right' }}>EDGE</span>
+            </div>
+
+            {/* Projection rows */}
+            {projections.map((row, i) => (
+              <div key={i} style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 52px 52px 68px 68px 72px',
+                padding: '11px 20px',
+                borderBottom: i < projections.length - 1 ? `1px solid ${C.border}` : 'none',
+                fontFamily: F.mono, fontSize: '13px', fontWeight: 400,
+                background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.008)',
               }}>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
-                  <div style={{
-                    width: '44px', height: '44px', borderRadius: '50%', flexShrink: 0,
-                    background: `linear-gradient(135deg, ${t.color}, ${C.primary})`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 700, fontSize: '16px', color: '#F1F0FF',
-                    border: `2px solid ${t.color}`,
-                  }}>
-                    {t.initial}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '15px', color: C.text }}>{t.name}</div>
-                    <div style={{ fontSize: '12px', color: t.color }}>{t.tier}</div>
-                  </div>
-                </div>
-                <div style={{ color: C.accentLight, fontSize: '14px', marginBottom: '12px' }}>★★★★★</div>
-                <p style={{ color: C.textMuted, fontSize: '14px', lineHeight: 1.7, margin: 0 }}>
-                  &quot;{t.quote}&quot;
-                </p>
+                <span style={{ color: C.platinum }}>{row.player}</span>
+                <span style={{ color: C.muted }}>{row.team}</span>
+                <span style={{ color: C.dim }}>{row.stat}</span>
+                <span style={{ color: C.muted, textAlign: 'right' }}>{row.proj.toFixed(1)}</span>
+                <span style={{ color: C.dim, textAlign: 'right' }}>{row.line.toFixed(1)}</span>
+                <span style={{
+                  textAlign: 'right', fontWeight: 500,
+                  color: row.edge > 0 ? C.signalCyan : C.flagAmber,
+                }}>
+                  {row.edge > 0 ? '+' : ''}{row.edge.toFixed(1)}
+                </span>
               </div>
             ))}
+
+            {/* Footer note */}
+            <div style={{
+              padding: '10px 20px',
+              borderTop: `1px solid ${C.border}`,
+              fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+              color: C.faint, letterSpacing: '0.08em',
+              background: C.panel,
+            }}>
+              SAMPLE DATA · ILLUSTRATIVE MODEL OUTPUT · ACTUAL SLATE VARIES
+            </div>
           </div>
         </div>
       </section>
 
-      {/* PLATFORM INTEGRATIONS */}
-      <section style={{ padding: '80px 40px', maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <h2 style={{
-            fontFamily: F.heading, fontSize: 'clamp(32px, 4vw, 48px)',
-            fontWeight: 700, margin: 0,
-          }}>
-            PLATFORM <span style={{ color: C.accentLight }}>INTEGRATIONS</span>
-          </h2>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+      {/* ── SECTION 3: STAT STRIP ─────────────────────────────────── */}
+      <section style={{
+        borderTop: `1px solid ${C.border}`,
+        borderBottom: `1px solid ${C.border}`,
+        background: C.panel,
+      }}>
+        <div style={{
+          maxWidth: '1200px', margin: '0 auto',
+          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+        }}>
           {[
-            { icon: '⬡', title: 'REFERRAL NETWORK', color: C.confirm, content: 'Earn $50 DataNexus credit every time you refer an analyst who activates a membership tier.', code: null },
-            { icon: '◉', title: 'UNDERDOG INTEGRATION', color: C.signal, content: 'Use on Underdog Fantasy.', code: 'XOTICPAPI' },
-            { icon: '⚡', title: '50% OFF FIRST MONTH', color: C.accentLight, content: 'New members only. Activate your first tier at half price.', code: null },
-            { icon: '◎', title: 'PRIZEPICKS INTEGRATION', color: '#E9D5FF', content: 'Use on PrizePicks.', code: 'PRZX81V5Z' },
-          ].map((o) => (
-            <div key={o.title} style={{
-              background: C.surface, border: `1px solid ${C.border}`,
-              borderRadius: '14px', padding: '24px', textAlign: 'center',
+            { value: '05', label: 'INSTRUMENTS' },
+            { value: '07', label: 'AGENT PIPELINE' },
+            { value: '240+', label: 'PTS / SLATE' },
+            { value: '06:00', label: 'DAILY REFRESH' },
+          ].map((stat, i) => (
+            <div key={i} style={{
+              padding: '44px 40px',
+              borderRight: i < 3 ? `1px solid ${C.border}` : 'none',
+              textAlign: 'center',
             }}>
-              <div style={{ fontSize: '32px', marginBottom: '12px' }}>{o.icon}</div>
               <div style={{
-                fontFamily: F.heading, fontWeight: 700, fontSize: '14px',
-                color: o.color, marginBottom: '10px', letterSpacing: '0.5px',
+                fontFamily: F.mono, fontSize: '44px', fontWeight: 500,
+                color: C.signalCyan, letterSpacing: '-0.02em',
+                lineHeight: 1, marginBottom: '12px',
               }}>
-                {o.title}
+                {stat.value}
               </div>
-              {o.code && (
-                <div style={{
-                  background: 'rgba(167,139,250,0.08)',
-                  border: '1px solid rgba(167,139,250,0.2)',
-                  borderRadius: '8px', padding: '8px',
-                  fontFamily: F.heading, fontSize: '20px', fontWeight: 700,
-                  color: o.color, letterSpacing: '2px', marginBottom: '10px',
-                }}>
-                  {o.code}
-                </div>
-              )}
-              <p style={{ color: C.textMuted, fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
-                {o.content}
-              </p>
+              <div style={{
+                fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                color: C.dim, letterSpacing: '0.16em',
+              }}>
+                {stat.label}
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* FAQ */}
-      <section style={{
-        padding: '80px 40px',
-        background: C.surface,
-        borderTop: `1px solid ${C.border}`,
-      }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-            <h2 style={{
-              fontFamily: F.heading, fontSize: 'clamp(32px, 4vw, 48px)',
-              fontWeight: 700, margin: 0,
-            }}>
-              FREQUENTLY ASKED <span style={{ color: C.accentLight }}>QUESTIONS</span>
-            </h2>
+      {/* ── SECTION 4: INSTRUMENTS ────────────────────────────────── */}
+      <section id="engine" style={{ padding: '100px 40px' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+
+          {/* Section header */}
+          <div style={{
+            fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+            color: C.dim, letterSpacing: '0.1em', marginBottom: '8px',
+          }}>
+            // THE ENGINE
           </div>
+          <div style={{
+            fontFamily: F.mono, fontSize: '13px', fontWeight: 400,
+            color: C.faint, marginBottom: '56px',
+          }}>
+            &gt; list_instruments --status=active --count=5
+          </div>
+
+          {/* Instruments list */}
           <div>
-            {faqs.map((faq, i) => (
+            {instruments.map((inst, i) => (
               <div key={i} style={{
-                border: `1px solid ${C.border}`,
-                borderRadius: '12px', marginBottom: '12px', overflow: 'hidden',
+                display: 'grid',
+                gridTemplateColumns: '48px 1fr 100px',
+                gap: '28px', alignItems: 'start',
+                padding: '32px 0',
+                borderBottom: i < instruments.length - 1 ? `1px solid ${C.border}` : 'none',
               }}>
-                <button
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  style={{
-                    width: '100%', padding: '20px 24px',
-                    background: openFaq === i ? C.surface2 : C.primary,
-                    border: 'none', cursor: 'pointer',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span style={{ fontSize: '16px', fontWeight: 500, color: C.text }}>
-                    {faq.q}
-                  </span>
-                  <span style={{
-                    color: C.accentLight, fontSize: '22px',
-                    fontWeight: 300, flexShrink: 0, marginLeft: '16px',
+                {/* Index */}
+                <div style={{
+                  fontFamily: F.mono, fontSize: '12px', fontWeight: 400,
+                  color: C.dim, letterSpacing: '0.08em', paddingTop: '3px',
+                }}>
+                  {inst.id}
+                </div>
+
+                {/* Name + description */}
+                <div>
+                  <div style={{
+                    fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+                    color: C.platinum, letterSpacing: '0.08em',
+                    marginBottom: '10px',
                   }}>
-                    {openFaq === i ? '−' : '+'}
-                  </span>
-                </button>
-                {openFaq === i && (
-                  <div style={{ padding: '0 24px 20px', color: C.textMuted, fontSize: '15px', lineHeight: 1.7 }}>
-                    {faq.a}
+                    {inst.name}
                   </div>
-                )}
+                  <div style={{
+                    fontFamily: F.sans, fontSize: '15px', fontWeight: 400,
+                    color: C.muted, lineHeight: 1.65,
+                  }}>
+                    {inst.desc}
+                  </div>
+                </div>
+
+                {/* Tier badge */}
+                <div style={{
+                  fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                  color: C.faint, letterSpacing: '0.08em',
+                  border: `1px solid ${C.border}`,
+                  padding: '5px 10px',
+                  textAlign: 'center',
+                  alignSelf: 'start',
+                  marginTop: '2px',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {inst.tier}
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* ── SECTION 5: MEMBERSHIP CTA ─────────────────────────────── */}
+      <section style={{
+        padding: '100px 40px',
+        borderTop: `1px solid ${C.border}`,
+        background: C.panel,
+      }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+
+          {/* Section header */}
+          <div style={{
+            fontFamily: F.mono, fontSize: '11px', fontWeight: 400,
+            color: C.dim, letterSpacing: '0.1em', marginBottom: '8px',
+          }}>
+            // ACCESS
+          </div>
+          <div style={{
+            fontFamily: F.mono, fontSize: '13px', fontWeight: 400,
+            color: C.faint, marginBottom: '52px',
+          }}>
+            &gt; request_access --type=membership --desk=private
+          </div>
+
+          {/* Headline */}
+          <h2 style={{
+            fontFamily: F.sans, fontSize: 'clamp(36px, 5.5vw, 68px)',
+            fontWeight: 500, letterSpacing: '-0.025em',
+            lineHeight: 1.05, margin: '0 0 24px', color: C.platinum,
+          }}>
+            Private quantitative desk.
+          </h2>
+
+          {/* Copy */}
+          <p style={{
+            fontFamily: F.sans, fontSize: '17px', fontWeight: 400,
+            color: C.muted, lineHeight: 1.65,
+            margin: '0 0 52px', maxWidth: '560px',
+          }}>
+            The Analytics Community is a private membership for serious NBA analysts.
+            Access to the engine is granted by tier — from daily signals through full
+            model operator access with backtesting and raw data export.
+          </p>
+
+          {/* Tier reference table */}
+          <div style={{ border: `1px solid ${C.border}`, marginBottom: '40px' }}>
+            {BRAND.tiers.map((tier, i) => (
+              <div key={tier.slug} style={{
+                display: 'grid', gridTemplateColumns: '110px 1fr 90px',
+                gap: '20px', alignItems: 'center',
+                padding: '16px 20px',
+                borderBottom: i < BRAND.tiers.length - 1 ? `1px solid ${C.border}` : 'none',
+                background: tier.mostPopular ? 'rgba(47,212,232,0.025)' : 'transparent',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {tier.mostPopular && (
+                    <span style={{ width: '3px', height: '14px', background: C.signalCyan, display: 'inline-block', flexShrink: 0 }} />
+                  )}
+                  <span style={{
+                    fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
+                    color: tier.mostPopular ? C.signalCyan : C.platinum,
+                    letterSpacing: '0.08em',
+                  }}>
+                    {tier.label.toUpperCase()}
+                  </span>
+                </div>
+                <div style={{
+                  fontFamily: F.sans, fontSize: '13px', fontWeight: 400,
+                  color: C.muted, lineHeight: 1.4,
+                }}>
+                  {tier.description}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{
+                    fontFamily: F.mono, fontSize: '14px', fontWeight: 500,
+                    color: tier.mostPopular ? C.signalCyan : C.platinum,
+                  }}>
+                    ${tier.priceMonthly}
+                  </span>
+                  <span style={{
+                    fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+                    color: C.dim,
+                  }}>
+                    /mo
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTAs */}
+          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+            <a href="/join" style={{
+              display: 'inline-block',
+              background: C.signalCyan, color: '#000000',
+              padding: '13px 32px', fontFamily: F.mono,
+              fontSize: '12px', fontWeight: 500, letterSpacing: '0.1em',
+              textDecoration: 'none',
+            }}>
+              REQUEST ACCESS →
+            </a>
+            <a href="/picks" style={{
+              display: 'inline-block',
+              background: 'transparent', color: C.platinum,
+              padding: '12px 32px', fontFamily: F.mono,
+              fontSize: '12px', fontWeight: 400, letterSpacing: '0.1em',
+              textDecoration: 'none',
+              border: `1px solid ${C.border}`,
+            }}>
+              VIEW DAILY SIGNALS
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ────────────────────────────────────────────────── */}
       <footer style={{
         padding: '48px 40px',
-        borderTop: `1px solid ${C.border}`,
-        textAlign: 'center',
+        borderTop: `1px solid ${C.borderEmphasis}`,
+        background: C.panel,
       }}>
-        <div style={{
-          fontFamily: F.heading, fontSize: '24px', fontWeight: 700,
-          marginBottom: '12px', letterSpacing: '0.5px',
-        }}>
-          <span style={{ color: C.accentLight }}>Data</span>
-          <span style={{ color: C.text }}>Nexus</span>
-        </div>
-        <p style={{ color: C.textMuted, fontSize: '14px', marginBottom: '8px' }}>
-          📧 support@datanexus.ai
-        </p>
-        <p style={{ color: C.textMuted, fontSize: '13px', marginBottom: '24px' }}>
-          © 2025 DataNexus
-        </p>
-        <div style={{
-          maxWidth: '800px', margin: '0 auto',
-          background: C.surface, borderRadius: '12px',
-          padding: '20px 24px', fontSize: '12px',
-          color: C.textMuted, lineHeight: 1.6,
-        }}>
-          <strong style={{ color: C.text }}>Membership Disclaimer: </strong>
-          All DataNexus memberships are billed on a recurring monthly basis. Membership grants access
-          to analytical modeling tools and data outputs — not investment advice. Past model accuracy
-          does not guarantee future results. For support or cancellations contact support@datanexus.ai
-          at least 48 hours before your billing date.
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+
+          {/* Top row */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'flex-start', flexWrap: 'wrap', gap: '40px',
+            marginBottom: '40px',
+          }}>
+            {/* Wordmark + domain */}
+            <div>
+              <div style={{
+                fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
+                letterSpacing: '0.04em', marginBottom: '8px',
+              }}>
+                <span style={{ color: C.platinum }}>▌ THE_ANALYTICS_</span>
+                <span style={{ color: C.signalCyan }}>COMMUNITY</span>
+              </div>
+              <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
+                {BRAND.domain}
+              </div>
+            </div>
+
+            {/* Nav columns */}
+            <div style={{ display: 'flex', gap: '56px' }}>
+              <div>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
+                  color: C.dim, letterSpacing: '0.16em', marginBottom: '14px',
+                  textTransform: 'uppercase',
+                }}>
+                  Platform
+                </div>
+                {[['Daily Signals', '/picks'], ['Accuracy Index', '/tracker'], ['Membership', '/join']].map(([label, href]) => (
+                  <div key={label} style={{ marginBottom: '10px' }}>
+                    <a href={href} style={{
+                      fontFamily: F.sans, fontSize: '13px', fontWeight: 400,
+                      color: C.muted, textDecoration: 'none',
+                    }}>
+                      {label}
+                    </a>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{
+                  fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
+                  color: C.dim, letterSpacing: '0.16em', marginBottom: '14px',
+                  textTransform: 'uppercase',
+                }}>
+                  Engine
+                </div>
+                {[
+                  ['Projection Engine', '/tools/projection-runner'],
+                  ['Matchup Matrix', '/tools/matchup-builder'],
+                  ['Lineup Calibrator', '/tools/lineup-adjuster'],
+                  ['Backtester', '/tools/backtester'],
+                ].map(([label, href]) => (
+                  <div key={label} style={{ marginBottom: '10px' }}>
+                    <a href={href} style={{
+                      fontFamily: F.sans, fontSize: '13px', fontWeight: 400,
+                      color: C.muted, textDecoration: 'none',
+                    }}>
+                      {label}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom row */}
+          <div style={{
+            borderTop: `1px solid ${C.border}`, paddingTop: '24px',
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', flexWrap: 'wrap', gap: '12px',
+          }}>
+            <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
+              © 2025 The Analytics Community
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
+              {BRAND.supportEmail}
+            </div>
+          </div>
+
+          {/* Disclaimer */}
+          <div style={{
+            marginTop: '20px',
+            fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
+            color: C.faint, lineHeight: 1.7, letterSpacing: '0.02em',
+          }}>
+            All memberships are billed on a recurring monthly basis. Membership grants access to analytical
+            modeling tools and data outputs — not investment advice. Past model accuracy does not guarantee
+            future results. Contact {BRAND.supportEmail} for support or cancellations at least 48 hours before your billing date.
+          </div>
         </div>
       </footer>
 
