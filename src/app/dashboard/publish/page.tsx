@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { statLabel } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
 
@@ -156,7 +157,7 @@ export default async function PublishPage() {
                         : pick.stat_type === 'reb' ? C.platinum : C.muted,
                       letterSpacing: '0.06em',
                     }}>
-                      {pick.stat_type?.toUpperCase()}
+                      {statLabel(pick.stat_type ?? '')}
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{

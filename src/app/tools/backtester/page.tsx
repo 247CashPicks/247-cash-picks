@@ -1,14 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BRAND } from '@/config/brand'
+import { statsFor, statLabel, isStatOfSport } from '@/lib/picks/stats'
+import { useSport } from '@/lib/sport/client'
+import type { StatType } from '@/lib/picks/types'
 
 const C = BRAND.colors
 const F = BRAND.fonts
 
 
 type DateRange  = '7d' | '30d' | 'custom'
-type StatFilter = 'all' | 'pts' | 'reb' | 'ast'
+type StatFilter = 'all' | StatType
 type ConfFilter = 'all' | 'high' | 'medium' | 'low'
 
 interface BacktestResult {
@@ -54,7 +57,18 @@ function RateBar({ rate }: { rate: number; color: string }) {
 
 export default function BacktesterPage() {
   const [dateRange, setDateRange]   = useState<DateRange>('30d')
+  const sport = useSport()
   const [statFilter, setStatFilter] = useState<StatFilter>('all')
+
+  // Switching sport can strand a stat that does not exist in the new
+  // vocabulary ('pts' under NFL). The API would filter stat_type='pts' against
+  // NFL rows and return an empty backtest that reads as "no history" rather
+  // than "impossible filter". Reset to 'all' instead.
+  useEffect(() => {
+    if (statFilter !== 'all' && !isStatOfSport(statFilter, sport)) {
+      setStatFilter('all')
+    }
+  }, [sport, statFilter])
   const [confFilter, setConfFilter] = useState<ConfFilter>('all')
   const [running, setRunning]       = useState(false)
   const [result, setResult]         = useState<BacktestResult | null>(null)
@@ -228,7 +242,7 @@ export default function BacktesterPage() {
                   STAT TYPE
                 </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                  {(['all', 'pts', 'reb', 'ast'] as StatFilter[]).map(v => (
+                  {(['all', ...statsFor(sport)] as StatFilter[]).map(v => (
                     <button key={v} onClick={() => setStatFilter(v)} style={{
                       padding: '7px 10px', cursor: 'pointer',
                       background: statFilter === v ? 'rgba(47,212,232,0.1)' : C.void,
@@ -237,7 +251,7 @@ export default function BacktesterPage() {
                       fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
                       textTransform: 'uppercase' as const, letterSpacing: '0.06em',
                     }}>
-                      {v}
+                      {v === 'all' ? 'ALL' : statLabel(v)}
                     </button>
                   ))}
                 </div>

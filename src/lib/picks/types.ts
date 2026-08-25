@@ -1,5 +1,9 @@
 export type TierSlug = 'free' | 'core' | 'signal' | 'analyst' | 'vector' | 'nexus'
-export type StatType = 'pts' | 'reb' | 'ast' | 'stl' | 'blk' | '3pm' | 'pts_reb_ast'
+// StatType is now the union of both sports' vocabularies, defined once in
+// ./stats.ts alongside the labels and the per-sport lists. Re-exported here so
+// the ~dozen `from '@/lib/picks/types'` importers keep working unchanged.
+import type { StatType } from './stats'
+export type { StatType }
 export type PickDirection = 'over' | 'under'
 export type PickResult = 'pending' | 'hit' | 'miss' | 'push' | 'void'
 export type PickConfidence = 'high' | 'medium' | 'low'

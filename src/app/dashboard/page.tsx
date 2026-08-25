@@ -3,6 +3,7 @@ import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
 import { canAccess } from '@/lib/picks/tiers'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
+import { statLabel } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
 import AgentPipeline from './AgentPipeline'
@@ -280,7 +281,7 @@ export default async function DashboardPage() {
                         </span>
                       </div>
                       <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.muted, marginBottom: '8px', letterSpacing: '0.04em' }}>
-                        {s.stat_type?.toUpperCase()} {s.direction?.toUpperCase()} {s.line}
+                        {statLabel(s.stat_type ?? '')} {s.direction?.toUpperCase()} {s.line}
                         {' · '}{s.platform}
                         {s.edge_pct && (
                           <span style={{ color: C.signalCyan, fontWeight: 500 }}>

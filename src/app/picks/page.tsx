@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import type { TierSlug, PickPublished } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
+import { statLabel } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
 
@@ -114,7 +115,7 @@ function PickCard({ pick, locked }: { pick: PickPublished; locked?: boolean }) {
       }}>
         <div>
           <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.dim, letterSpacing: '0.1em', marginBottom: '6px' }}>
-            {pick.stat_type.toUpperCase()} LINE
+            {statLabel(pick.stat_type)} LINE
           </div>
           <div style={{ fontFamily: F.mono, fontSize: '38px', fontWeight: 500, color: C.platinum, lineHeight: 1 }}>
             {pick.line}

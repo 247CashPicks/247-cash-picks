@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { guardRoute, sessionTier } from '@/lib/auth/guards'
 import { TOOL_MIN_TIERS } from '@/lib/picks/tiers'
+import { statsFor } from '@/lib/picks/stats'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
 
@@ -77,7 +78,10 @@ export async function POST(req: NextRequest) {
   }
 
   const byStat: Record<string, { hits: number; total: number; rate: number }> = {}
-  for (const stat of ['pts', 'reb', 'ast']) {
+  // Was hardcoded ['pts','reb','ast'] — three of the NBA's seven, and none of
+  // the NFL's five. Driven by the sport's vocabulary now, so an NFL backtest
+  // reports rec_yds/receptions/rush_yds/... instead of three empty buckets.
+  for (const stat of statsFor(sport)) {
     const group = resolved.filter(p => p.stat_type === stat)
     const groupHits = group.filter(p => p.result === 'hit')
     byStat[stat] = {

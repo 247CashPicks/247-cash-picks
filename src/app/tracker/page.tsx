@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
+import { statLabel } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
 
@@ -202,7 +203,7 @@ export default async function TrackerPage() {
                     </div>
                   </div>
                   <div style={{ fontFamily: F.mono, color: C.muted, fontSize: '12px', letterSpacing: '0.06em' }}>
-                    {r.stat_type?.toUpperCase()}
+                    {statLabel(r.stat_type ?? '')}
                   </div>
                   <div style={{ fontFamily: F.mono, fontWeight: 500, color: C.platinum, fontSize: '14px' }}>
                     {r.line}
