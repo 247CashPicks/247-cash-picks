@@ -1,4 +1,5 @@
 import { BRAND } from '@/config/brand'
+import { NAV_LINKS as navLinks } from '@/components/nav/links'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -36,12 +37,6 @@ const instruments = [
   },
 ]
 
-const navLinks = [
-  ['SIGNALS', '/picks'],
-  ['ENGINE', '/tools'],
-  ['PIPELINE', '/dashboard'],
-  ['TIERS', '/join'],
-]
 
 const SAMPLE_FEED = [
   { player: 'L. Dončić',      stat: 'PTS', proj: '31.4', line: '28.5', edge: '+10%' },

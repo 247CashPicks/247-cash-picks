@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { BRAND } from '@/config/brand'
+import { NAV_LINKS as navLinks } from '@/components/nav/links'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -46,12 +47,6 @@ const TIER_FEATURE_MAP: Record<string, Record<string, boolean>> = {
   nexus:   { daily_signals: true, full_signal_slate: true, accuracy_index: true, projection_viewer: true, projection_runner: true, matchup_builder: true, lineup_adjuster: true, backtester: true, early_access: true, guarantee: true, insider_group: true },
 }
 
-const navLinks = [
-  ['SIGNALS', '/picks'],
-  ['ENGINE', '/tools'],
-  ['PIPELINE', '/dashboard'],
-  ['TIERS', '/join'],
-]
 
 export default function JoinPage() {
   const [selected, setSelected] = useState<string>('vector')

@@ -8,12 +8,6 @@ import type { ProjectionInputs, ProjectionOutputs } from '@/lib/picks/types'
 const C = BRAND.colors
 const F = BRAND.fonts
 
-const NAV = [
-  ['SIGNALS',  '/picks'],
-  ['ENGINE',   '/tools'],
-  ['PIPELINE', '/dashboard'],
-  ['TIERS',    '/join'],
-] as [string, string][]
 
 const DEFAULT_INPUTS: ProjectionInputs = {
   projectedMinutes: 32,
@@ -345,35 +339,6 @@ export default function ProjectionRunnerPage() {
         backgroundSize: '48px 48px',
       }} />
 
-      {/* Nav */}
-      <nav style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        height: '56px',
-        background: 'rgba(0,0,0,0.92)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderBottom: `1px solid ${C.border}`,
-        display: 'flex', alignItems: 'center',
-        padding: '0 clamp(24px,4vw,48px)',
-        gap: '32px',
-      }}>
-        <a href="/" style={{
-          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
-          color: C.signalCyan, letterSpacing: '0.05em', textDecoration: 'none',
-          marginRight: 'auto',
-        }}>
-          {BRAND.name}
-        </a>
-        {NAV.map(([label, href]) => (
-          <a key={href} href={href} style={{
-            fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
-            color: href === '/tools' ? C.signalCyan : C.dim,
-            textDecoration: 'none',
-          }}>
-            {label}
-          </a>
-        ))}
-      </nav>
 
       <div style={{ position: 'relative', zIndex: 1, paddingTop: '56px' }}>
 

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
 import { BRAND } from '@/config/brand'
+import SiteNav from '@/components/nav/SiteNav'
+import { getSport } from '@/lib/sport/server'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -15,11 +17,15 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Read on the SERVER so first paint already carries the right league — a
+  // client-side cookie read would flash NBA before correcting itself.
+  const sport = await getSport()
+
   return (
     <ClerkProvider>
       <html lang="en">
@@ -43,6 +49,7 @@ export default function RootLayout({
             minHeight: '100vh',
           }}
         >
+          <SiteNav sport={sport} />
           {children}
         </body>
       </html>

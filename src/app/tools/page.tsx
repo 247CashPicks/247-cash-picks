@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import { canUseTool } from '@/lib/picks/tiers'
+import { sportConfig } from '@/lib/sport'
+import { getSport } from '@/lib/sport/server'
 import type { TierSlug, ToolKey } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
 
@@ -11,12 +13,6 @@ export const dynamic = 'force-dynamic'
 const C = BRAND.colors
 const F = BRAND.fonts
 
-const NAV = [
-  ['SIGNALS',  '/picks'],
-  ['ENGINE',   '/tools'],
-  ['PIPELINE', '/dashboard'],
-  ['TIERS',    '/join'],
-] as [string, string][]
 
 async function getToolUsage(clerkUserId: string) {
   const supabase = createServiceClient()
@@ -118,6 +114,7 @@ export default async function ToolsPage() {
 
   const wallet = await getWalletForUser(userId)
   const tier = (wallet?.tier_slug ?? 'free') as TierSlug
+  const cfg  = sportConfig(await getSport())
 
   const usage = await getToolUsage(userId)
   const usageCounts: Record<string, number> = {}
@@ -136,35 +133,6 @@ export default async function ToolsPage() {
         backgroundSize: '48px 48px',
       }} />
 
-      {/* Nav */}
-      <nav style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        height: '56px',
-        background: 'rgba(0,0,0,0.92)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderBottom: `1px solid ${C.border}`,
-        display: 'flex', alignItems: 'center',
-        padding: '0 clamp(24px,4vw,48px)',
-        gap: '32px',
-      }}>
-        <a href="/" style={{
-          fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
-          color: C.signalCyan, letterSpacing: '0.05em', textDecoration: 'none',
-          marginRight: 'auto',
-        }}>
-          {BRAND.name}
-        </a>
-        {NAV.map(([label, href]) => (
-          <a key={href} href={href} style={{
-            fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
-            color: href === '/tools' ? C.signalCyan : C.dim,
-            textDecoration: 'none',
-          }}>
-            {label}
-          </a>
-        ))}
-      </nav>
 
       {/* Content */}
       <div style={{ position: 'relative', zIndex: 1, paddingTop: '56px' }}>
@@ -222,7 +190,12 @@ export default async function ToolsPage() {
         {/* Tool cards */}
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(28px,3vw,44px) clamp(24px,4vw,48px)' }}>
           <div className="tools-grid">
-            {TOOLS.map((tool) => {
+            {/* Lineup Adjuster and Matchup Builder are basketball concepts —
+                per-36 over shared on-court minutes, and 1-on-1 defender iso
+                by height/weight. There is no NFL analogue, so under NFL they
+                are hidden rather than shown broken or half-ported. Their APIs
+                return unsupported:true for the same reason. */}
+            {TOOLS.filter((t) => !cfg.hiddenTools.includes(t.key)).map((tool) => {
               const unlocked = tier ? canUseTool(tier, tool.key) : false
               const runs = usageCounts[tool.key] || 0
 
