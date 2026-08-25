@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import type { TierSlug, PickPublished } from '@/lib/picks/types'
 import { BRAND } from '@/config/brand'
+import { getSport } from '@/lib/sport/server'
+import type { Sport } from '@/lib/sport'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,13 +19,14 @@ const NAV = [
   ['TIERS',    '/join'],
 ] as [string, string][]
 
-async function getTodaysPicks(): Promise<PickPublished[]> {
+async function getTodaysPicks(sport: Sport): Promise<PickPublished[]> {
   const supabase = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
   const { data } = await supabase
     .from('picks_published')
     .select('*')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('game_date', today)
     .eq('status', 'published')
     .order('display_order', { ascending: true })
@@ -171,7 +174,8 @@ export default async function PicksPage() {
   const wallet = await getWalletForUser(userId)
   const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
-  const picks = await getTodaysPicks()
+  const sport = await getSport()
+  const picks = await getTodaysPicks(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })

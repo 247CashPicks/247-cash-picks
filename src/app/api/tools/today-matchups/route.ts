@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
 
 interface MatchupDbRow {
@@ -59,6 +60,16 @@ export async function GET(req: NextRequest) {
   const dateParam = req.nextUrl.searchParams.get('date') ?? ''
   const date      = dateParam || new Date().toISOString().split('T')[0]
 
+  // NBA-only by construction (per-36 over shared on-court minutes / 1-on-1
+  // defender iso). Returns an honest empty result rather than querying NBA
+  // reference columns that do not exist on the NFL side. The nav hides this
+  // tool under NFL; this is the API-side half of that same rule.
+  const sport = sportFromRequest(req)
+  if (sport !== 'NBA') {
+    return NextResponse.json(
+      { matchups: [], games: [], sport, unsupported: true,
+        message: 'This tool is NBA-only — no NFL analogue exists.' })
+  }
   const supabase = createServiceClient()
 
   // 1. All matchups for the date
@@ -71,6 +82,7 @@ export async function GET(req: NextRequest) {
       'opponent_pace, opponent_def_rating, opp_rebs_allowed, opp_ast_allowed'
     )
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('game_date', date)
 
   if (matchupErr) return NextResponse.json({ error: matchupErr.message }, { status: 500 })
@@ -86,6 +98,8 @@ export async function GET(req: NextRequest) {
       'player_name, team, position, per36_pts, per36_reb, per36_ast, ' +
       'per36_stl, per36_blk, per36_tpm, avg_minutes'
     )
+    // No league filter: reference tables are per-sport TABLES and have no
+    // league column. Filtering here would be a 42703, not a narrower result.
     .eq('brand_id', BRAND.slug)
     .in('player_name', playerNames)
 
@@ -110,6 +124,7 @@ export async function GET(req: NextRequest) {
       .from('picks_games')
       .select('id, home_team, away_team')
       .eq('brand_id', BRAND.slug)
+      .eq('league', sport)
       .in('id', gameIds)
     for (const g of (gamesRaw ?? []) as GameRow[]) {
       gameInfoMap.set(g.id, g)

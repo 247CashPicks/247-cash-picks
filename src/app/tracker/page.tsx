@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
+import { getSport } from '@/lib/sport/server'
+import type { Sport } from '@/lib/sport'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -13,33 +15,36 @@ const NAV = [
   ['TIERS',    '/join'],
 ] as [string, string][]
 
-async function getWinRateStats() {
+async function getWinRateStats(sport: Sport) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('picks_published')
     .select('result, stat_type, confidence, game_date')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .neq('result', 'pending')
     .neq('result', 'void')
     .order('game_date', { ascending: false })
   return data || []
 }
 
-async function getRecentResults() {
+async function getRecentResults(sport: Sport) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from('picks_published')
     .select('player_name, team, stat_type, line, direction, result, actual_value, game_date, our_projection, confidence')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .order('game_date', { ascending: false })
     .limit(50)
   return data || []
 }
 
 export default async function TrackerPage() {
+  const sport = await getSport()
   const [stats, results] = await Promise.all([
-    getWinRateStats(),
-    getRecentResults(),
+    getWinRateStats(sport),
+    getRecentResults(sport),
   ])
 
   const resolved = stats.filter(s => s.result === 'hit' || s.result === 'miss')

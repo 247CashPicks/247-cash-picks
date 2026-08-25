@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { guardRoute, sessionTier } from '@/lib/auth/guards'
 import { TOOL_MIN_TIERS } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { sportFromRequest } from '@/lib/sport/request'
 
 export async function POST(req: NextRequest) {
   // Checked login but never the tier. TOOL_MIN_TIERS.backtester is 'nexus',
@@ -18,12 +19,14 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
+  const sport = sportFromRequest(req)
   const { dateFrom, dateTo, statFilter, confFilter } = await req.json()
 
   let query = supabase
     .from('picks_published')
     .select('player_name, stat_type, line, direction, our_projection, result, actual_value, confidence, game_date')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .neq('result', 'pending')
     .neq('result', 'void')
 

@@ -4,6 +4,7 @@ import { guardRoute, sessionTier } from '@/lib/auth/guards'
 import { TOOL_MIN_TIERS } from '@/lib/picks/tiers'
 import { runProjection } from '@/lib/picks/model'
 import { BRAND } from '@/config/brand'
+import { sportFromRequest } from '@/lib/sport/request'
 import type { ProjectionInputs } from '@/lib/picks/types'
 
 export async function POST(req: NextRequest) {
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
 
   const { userId, tier } = await sessionTier()
 
+  const sport = sportFromRequest(req)
   const supabase = createServiceClient()
 
   const body = await req.json()
@@ -135,6 +137,7 @@ export async function POST(req: NextRequest) {
     .from('picks_lines')
     .select('stat_type, line, platform')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('player_name', playerName || '')
     .eq('game_date', today)
 

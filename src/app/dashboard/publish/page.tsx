@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { getSport } from '@/lib/sport/server'
+import type { Sport } from '@/lib/sport'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,13 +18,14 @@ const NAV = [
   ['TIERS',    '/join'],
 ] as [string, string][]
 
-async function getConfirmedPicks() {
+async function getConfirmedPicks(sport: Sport) {
   const supabase = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
   const { data } = await supabase
     .from('picks_selections')
     .select('*')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('game_date', today)
     .eq('status', 'confirmed')
     .order('display_order', { ascending: true })
@@ -38,7 +41,8 @@ export default async function PublishPage() {
   if (!userId) redirect('/sign-in')
   if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
 
-  const picks = await getConfirmedPicks()
+  const sport = await getSport()
+  const picks = await getConfirmedPicks(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })

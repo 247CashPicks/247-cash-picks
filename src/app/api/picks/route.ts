@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
 
 // GET /api/picks?date=2026-05-12
@@ -21,11 +22,13 @@ export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get('date')
     || new Date().toISOString().split('T')[0]
 
+  const sport = sportFromRequest(req)
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('picks_published')
     .select('*')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('game_date', date)
     .order('display_order', { ascending: true })
 
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
   const jsonBody = body ? null : await req.json().catch(() => null)
 
   const action = (body?.get('action') as string | null) || jsonBody?.action
+  const sport = sportFromRequest(req)
   const supabase = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
 
@@ -65,6 +69,7 @@ export async function POST(req: NextRequest) {
       .from('picks_selections')
       .select('*')
       .eq('brand_id', BRAND.slug)
+      .eq('league', sport)
       .eq('game_date', today)
       .eq('status', 'confirmed')
 
@@ -74,6 +79,10 @@ export async function POST(req: NextRequest) {
 
     const publishedRows = confirmed.map((s) => ({
       brand_id: BRAND.slug,
+      // NOT NULL on picks_published. Carried from the selection rather than
+      // from `sport`, so a row can never be published under a league other
+      // than the one it was selected for.
+      league: s.league ?? sport,
       selection_id: s.id,
       game_date: s.game_date,
       game_id: s.game_id,
@@ -103,6 +112,7 @@ export async function POST(req: NextRequest) {
       .from('picks_selections')
       .update({ status: 'published', published_at: new Date().toISOString() })
       .eq('brand_id', BRAND.slug)
+      .eq('league', sport)
       .eq('game_date', today)
       .eq('status', 'confirmed')
 
@@ -119,6 +129,7 @@ export async function POST(req: NextRequest) {
           },
           body: JSON.stringify({
             brand_id: BRAND.slug,
+            league: sport,
             game_date: today,
             pick_count: confirmed.length,
           }),
@@ -148,6 +159,7 @@ export async function POST(req: NextRequest) {
     .select('*')
     .eq('id', projectionId)
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .single()
 
   if (!proj) {
@@ -158,6 +170,7 @@ export async function POST(req: NextRequest) {
     .from('picks_lines')
     .select('*')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('player_name', playerName)
     .eq('game_date', today)
     .order('edge_pct', { ascending: false })
@@ -168,6 +181,7 @@ export async function POST(req: NextRequest) {
     .from('picks_selections')
     .insert({
       brand_id: BRAND.slug,
+      league: sport,          // NOT NULL on picks_selections
       game_date: today,
       game_id: proj.game_id,
       player_name: proj.player_name,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { guardRoute } from '@/lib/auth/guards'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
+import { sportFromRequest } from '@/lib/sport/request'
 
 // GET /api/projections?date=2026-05-12&player=luka
 export async function GET(req: NextRequest) {
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest) {
   const denied = await guardRoute('signal', 'Signal tier or higher required')
   if (denied) return denied
 
+  const sport = sportFromRequest(req)
   const supabase = createServiceClient()
 
   const date = req.nextUrl.searchParams.get('date')
@@ -29,6 +31,7 @@ export async function GET(req: NextRequest) {
       game_id, game_date
     `)
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('game_date', date)
     .order('confidence_score', { ascending: false })
 
@@ -48,6 +51,7 @@ export async function GET(req: NextRequest) {
     .from('picks_matchups')
     .select('*')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('game_date', date)
     .in('player_name', playerNames)
 

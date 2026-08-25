@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { SPORT_CONFIG } from '@/lib/sport'
+import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
 
 // Use an index-signature interface so select('*') doesn't require every column to be declared.
@@ -41,6 +43,16 @@ export async function GET(req: NextRequest) {
   const dateParam = req.nextUrl.searchParams.get('date') ?? ''
   const date      = dateParam || new Date().toISOString().split('T')[0]
 
+  // NBA-only by construction (per-36 over shared on-court minutes / 1-on-1
+  // defender iso). Returns an honest empty result rather than querying NBA
+  // reference columns that do not exist on the NFL side. The nav hides this
+  // tool under NFL; this is the API-side half of that same rule.
+  const sport = sportFromRequest(req)
+  if (sport !== 'NBA') {
+    return NextResponse.json(
+      { players: [], sport, unsupported: true,
+        message: 'This tool is NBA-only — no NFL analogue exists.' })
+  }
   const supabase = createServiceClient()
 
   // select('*') — safer than enumerating _adj columns that may not exist yet in the table
@@ -48,6 +60,7 @@ export async function GET(req: NextRequest) {
     .from('picks_players')
     .select('*')
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('game_date', date)
     .or('injury_status.is.null,injury_status.neq.out')
 
@@ -100,7 +113,10 @@ export async function GET(req: NextRequest) {
 }
 
 // ---- POST: live ladder compute for a user-selected combo ----
-const BASELINE_SEASON = '2024-25'
+// Was a hardcoded '2024-25'. NBA seasons span two calendar years, NFL one
+// ('2026'); the mismatch returns zero rows silently rather than erroring, so
+// it reads as "no data" instead of "wrong key". Sourced from sport config.
+const BASELINE_SEASON = SPORT_CONFIG.NBA.baselineSeason
 const MIN_GAMES = 20            // mirrors engine LINEUP_COMBO_MIN_GAMES
 const MIN_MINUTES = 48          // guards per-36 from tiny samples
 

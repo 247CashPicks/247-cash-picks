@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { sportConfig } from '@/lib/sport'
+import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
 
 export async function GET(req: NextRequest) {
@@ -24,13 +26,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ players: [] })
   }
 
+  // Reference tables are per-sport TABLES, not league-filtered rows, so this
+  // is a table swap. The rank column swaps with it: nfl_players_reference has
+  // no per36_pts, and ordering by a missing column returns an error, not an
+  // unordered list.
+  const cfg = sportConfig(sportFromRequest(req))
   const supabase = createServiceClient()
   const { data, error } = await supabase
-    .from('nba_players_reference')
+    .from(cfg.playersReference)
     .select('player_name, team, position')
     .eq('brand_id', BRAND.slug)
     .ilike('player_name', `${q}%`)
-    .order('per36_pts', { ascending: false })
+    .order(cfg.playerRankColumn, { ascending: false })
     .limit(8)
 
   if (error) {

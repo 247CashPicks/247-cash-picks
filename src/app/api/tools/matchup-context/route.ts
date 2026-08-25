@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
+import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
 
 export async function GET(req: NextRequest) {
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'player param required' }, { status: 400 })
   }
 
+  const sport = sportFromRequest(req)
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('picks_matchups')
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
       'defender_name, defender_team'
     )
     .eq('brand_id', BRAND.slug)
+    .eq('league', sport)
     .eq('player_name', player)
     .eq('game_date', date)
     .single()

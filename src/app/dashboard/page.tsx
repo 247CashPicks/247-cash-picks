@@ -3,6 +3,8 @@ import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
 import { canAccess } from '@/lib/picks/tiers'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
+import { getSport } from '@/lib/sport/server'
+import type { Sport } from '@/lib/sport'
 import AgentPipeline from './AgentPipeline'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +19,7 @@ const NAV = [
   ['TIERS',    '/join'],
 ] as [string, string][]
 
-async function getDashboardData() {
+async function getDashboardData(sport: Sport) {
   const supabase = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
 
@@ -26,6 +28,7 @@ async function getDashboardData() {
       .from('picks_projections')
       .select('*')
       .eq('brand_id', BRAND.slug)
+      .eq('league', sport)
       .eq('game_date', today)
       .order('confidence_score', { ascending: false }),
 
@@ -33,6 +36,7 @@ async function getDashboardData() {
       .from('picks_selections')
       .select('*')
       .eq('brand_id', BRAND.slug)
+      .eq('league', sport)
       .eq('game_date', today)
       .in('status', ['pending', 'confirmed'])
       .order('display_order', { ascending: true }),
@@ -41,6 +45,7 @@ async function getDashboardData() {
       .from('picks_lines')
       .select('player_name, stat_type, line, platform, edge_pct, recommended_side')
       .eq('brand_id', BRAND.slug)
+      .eq('league', sport)
       .eq('game_date', today)
       .order('edge_pct', { ascending: false }),
   ])
@@ -70,7 +75,8 @@ export default async function DashboardPage() {
   if (!userId) redirect('/sign-in')
   if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
 
-  const { projections, selections, lines } = await getDashboardData()
+  const sport = await getSport()
+  const { projections, selections, lines } = await getDashboardData(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
