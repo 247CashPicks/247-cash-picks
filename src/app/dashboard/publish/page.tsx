@@ -13,7 +13,14 @@ const C = BRAND.colors
 const F = BRAND.fonts
 
 
-async function getConfirmedPicks(sport: Sport) {
+// Both halves of the operator loop: what is staged and awaiting a decision,
+// and what has been confirmed and is ready to transmit.
+//
+// No `game_date = today` filter. NFL stages a whole week at once (a Week 1 run
+// writes 09-09 through 09-14), so a same-day filter showed an empty queue on
+// five days out of six while selections sat waiting. Bounded below by today
+// instead, so settled past slates do not accumulate in the queue.
+async function getSelections(sport: Sport) {
   const supabase = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
   const { data } = await supabase
@@ -21,10 +28,16 @@ async function getConfirmedPicks(sport: Sport) {
     .select('*')
     .eq('brand_id', BRAND.slug)
     .eq('league', sport)
-    .eq('game_date', today)
-    .eq('status', 'confirmed')
+    .gte('game_date', today)
+    .in('status', ['pending', 'confirmed'])
+    .order('game_date', { ascending: true })
     .order('display_order', { ascending: true })
-  return data || []
+
+  const rows = data || []
+  return {
+    pending: rows.filter(r => r.status === 'pending'),
+    picks:   rows.filter(r => r.status === 'confirmed'),
+  }
 }
 
 export default async function PublishPage() {
@@ -37,7 +50,7 @@ export default async function PublishPage() {
   if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
 
   const sport = await getSport()
-  const picks = await getConfirmedPicks(sport)
+  const { pending, picks } = await getSelections(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
@@ -121,6 +134,117 @@ export default async function PublishPage() {
                 </div>
               </div>
 
+              {/* ── Staged, awaiting the operator's decision ─────────────
+                  A selection the backend selector wrote sits at status
+                  'pending' until a human confirms it. picks_publisher only
+                  ever promotes 'confirmed', so without this queue an NFL slate
+                  staged itself and then stopped, with nothing in the UI able
+                  to move it forward. */}
+              <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden', marginBottom: '24px' }}>
+                <div style={{
+                  padding: '14px 24px', borderBottom: `1px solid ${C.border}`,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.flagAmber, letterSpacing: '0.12em' }}>
+                    // {pending.length} STAGED · AWAITING CONFIRMATION
+                  </div>
+                  <span style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
+                    {sport}
+                  </span>
+                </div>
+
+                {pending.length === 0 ? (
+                  <div style={{ padding: '32px 24px', textAlign: 'center', fontFamily: F.mono, color: C.muted, fontSize: '13px', lineHeight: 1.7 }}>
+                    Nothing staged for an upcoming {sport} slate.<br />
+                    Run the selector to stage selections.
+                  </div>
+                ) : pending.map((pick, i) => (
+                  <div key={pick.id} style={{
+                    padding: '16px 24px',
+                    borderBottom: i < pending.length - 1 ? `1px solid ${C.border}` : 'none',
+                    display: 'grid',
+                    gridTemplateColumns: '2fr 90px 90px 90px 80px 90px 90px 110px',
+                    alignItems: 'center', gap: '12px',
+                  }}>
+                    <div>
+                      <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '15px', color: C.platinum }}>
+                        {pick.player_name}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, marginTop: '2px' }}>
+                        {pick.team} · {pick.platform}
+                      </div>
+                    </div>
+
+                    {/* game_date — an NFL queue spans several dates at once, so
+                        the row is meaningless without it */}
+                    <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.muted, letterSpacing: '0.04em' }}>
+                      {pick.game_date}
+                    </div>
+
+                    <div style={{ fontFamily: F.mono, fontSize: '14px', fontWeight: 500, color: C.platinum, letterSpacing: '0.06em' }}>
+                      {statLabel(pick.stat_type ?? '')}
+                    </div>
+
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        fontFamily: F.mono, fontSize: '16px', fontWeight: 500,
+                        color: pick.direction === 'over' ? C.signalCyan : C.platinum,
+                      }}>
+                        {pick.direction?.toUpperCase()}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>
+                        LINE: {pick.line}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontFamily: F.mono, fontWeight: 500, fontSize: '15px', color: C.platinum }}>
+                        {pick.our_projection}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>PROJ</div>
+                    </div>
+
+                    {/* edge_pct — the single number the confirm/skip call turns on */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        fontFamily: F.mono, fontWeight: 500, fontSize: '15px',
+                        color: pick.edge_pct == null ? C.muted
+                          : pick.edge_pct >= 10 ? C.signalCyan
+                          : pick.edge_pct > 0 ? C.platinum : C.flagAmber,
+                      }}>
+                        {pick.edge_pct == null
+                          ? '—'
+                          : `${pick.edge_pct > 0 ? '+' : ''}${Number(pick.edge_pct).toFixed(1)}%`}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>EDGE</div>
+                    </div>
+
+                    <div style={{
+                      textAlign: 'center', padding: '5px 8px',
+                      border: `1px solid ${pick.confidence === 'high' ? C.borderEmphasis : C.border}`,
+                      fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
+                      letterSpacing: '0.08em', textTransform: 'uppercase' as const,
+                      color: pick.confidence === 'high' ? C.signalCyan : C.platinum,
+                    }}>
+                      {pick.confidence}
+                    </div>
+
+                    <form action="/api/picks" method="POST" style={{ textAlign: 'right' }}>
+                      <input type="hidden" name="action" value="confirm" />
+                      <input type="hidden" name="selection_id" value={pick.id} />
+                      <button type="submit" style={{
+                        fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.1em',
+                        padding: '7px 14px', cursor: 'pointer',
+                        background: 'transparent', color: C.signalCyan,
+                        border: `1px solid ${C.borderEmphasis}`,
+                      }}>
+                        CONFIRM
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+
               {/* Signals to transmit */}
               <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden', marginBottom: '24px' }}>
                 <div style={{
@@ -140,7 +264,7 @@ export default async function PublishPage() {
                     padding: '18px 24px',
                     borderBottom: i < picks.length - 1 ? `1px solid ${C.border}` : 'none',
                     display: 'grid',
-                    gridTemplateColumns: '2fr 80px 100px 80px 100px 80px',
+                    gridTemplateColumns: '2fr 90px 80px 100px 80px 90px 100px 80px',
                     alignItems: 'center', gap: '12px',
                   }}>
                     <div>
@@ -151,10 +275,12 @@ export default async function PublishPage() {
                         {pick.team} · {pick.platform}
                       </div>
                     </div>
+                    <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.muted, letterSpacing: '0.04em' }}>
+                      {pick.game_date}
+                    </div>
                     <div style={{
                       fontFamily: F.mono, fontSize: '15px', fontWeight: 500,
-                      color: pick.stat_type === 'pts' ? C.signalCyan
-                        : pick.stat_type === 'reb' ? C.platinum : C.muted,
+                      color: C.platinum,
                       letterSpacing: '0.06em',
                     }}>
                       {statLabel(pick.stat_type ?? '')}
@@ -176,6 +302,19 @@ export default async function PublishPage() {
                         {pick.our_projection}
                       </div>
                       <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>PROJ</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        fontFamily: F.mono, fontWeight: 500, fontSize: '15px',
+                        color: pick.edge_pct == null ? C.muted
+                          : pick.edge_pct >= 10 ? C.signalCyan
+                          : pick.edge_pct > 0 ? C.platinum : C.flagAmber,
+                      }}>
+                        {pick.edge_pct == null
+                          ? '—'
+                          : `${pick.edge_pct > 0 ? '+' : ''}${Number(pick.edge_pct).toFixed(1)}%`}
+                      </div>
+                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>EDGE</div>
                     </div>
                     <div style={{
                       textAlign: 'center', padding: '5px 8px',

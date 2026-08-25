@@ -62,7 +62,48 @@ export async function POST(req: NextRequest) {
   const action = (body?.get('action') as string | null) || jsonBody?.action
   const sport = sportFromRequest(req)
   const supabase = createServiceClient()
-  const today = new Date().toISOString().split('T')[0]
+
+  // Stage a selection for release: pending -> confirmed. The backend's
+  // picks_publisher promotes confirmed -> published; this is the operator's
+  // half of that handshake and the only step a human makes.
+  if (action === 'confirm' || action === 'unconfirm') {
+    const selectionId =
+      (body?.get('selection_id') as string | null) || jsonBody?.selection_id
+    if (!selectionId) {
+      return NextResponse.json({ error: 'selection_id required' }, { status: 400 })
+    }
+
+    const next = action === 'confirm' ? 'confirmed' : 'pending'
+    const from = action === 'confirm' ? 'pending' : 'confirmed'
+
+    const { data: updated, error: confirmErr } = await supabase
+      .from('picks_selections')
+      .update({
+        status: next,
+        confirmed_at: action === 'confirm' ? new Date().toISOString() : null,
+      })
+      .eq('brand_id', BRAND.slug)
+      .eq('league', sport)
+      .eq('id', selectionId)
+      // Only move a row that is in the expected state. Without this, a double
+      // submit could walk an already-published row back to confirmed and
+      // republish it.
+      .eq('status', from)
+      .select('id')
+
+    if (confirmErr) {
+      return NextResponse.json({ error: confirmErr.message }, { status: 500 })
+    }
+    if (!updated || updated.length === 0) {
+      return NextResponse.json(
+        { error: `No ${from} selection with that id — it may already have been `
+               + `actioned.` }, { status: 409 })
+    }
+
+    // Server-rendered form post: send the operator back to the page, which
+    // re-queries and shows the row in its new state.
+    return NextResponse.redirect(new URL('/dashboard/publish', req.url), 303)
+  }
 
   // Publish all confirmed picks
   if (action === 'publish_all') {
@@ -71,7 +112,12 @@ export async function POST(req: NextRequest) {
       .select('*')
       .eq('brand_id', BRAND.slug)
       .eq('league', sport)
-      .eq('game_date', today)
+      // No game_date filter. NFL selections span a whole week (a Week 1 run
+      // stages 09-09 through 09-14), so a `= today` sweep published nothing
+      // for NFL on five days out of six. This also matches the backend
+      // publisher's own semantics: omit the date and it sweeps whatever is
+      // ready. For NBA, confirmed rows are same-day anyway, so nothing about
+      // the existing flow changes.
       .eq('status', 'confirmed')
 
     if (!confirmed || confirmed.length === 0) {
@@ -114,30 +160,40 @@ export async function POST(req: NextRequest) {
       .update({ status: 'published', published_at: new Date().toISOString() })
       .eq('brand_id', BRAND.slug)
       .eq('league', sport)
-      .eq('game_date', today)
       .eq('status', 'confirmed')
 
-    // Trigger Herald + Messenger via Railway backend
+    // Trigger the backend publisher.
+    //
+    // This called ${BACKEND_URL}/publisher/fire, which does not exist. The real
+    // route is POST /agents/picks-publisher/run, it takes date and league as
+    // QUERY parameters rather than a JSON body, and it is Bearer-gated on
+    // CRON_SECRET. Because the call sits in a try/catch marked non-fatal, it
+    // has been 404ing silently on every publish — the rows went out, the
+    // backend sweep never ran.
+    //
+    // The date is deliberately omitted: the publisher sweeps every confirmed
+    // selection when given none, which is what a multi-date NFL slate needs,
+    // and it is idempotent so a re-run never double-publishes.
     const backendUrl = process.env.BACKEND_URL
     if (backendUrl) {
       try {
-        await fetch(`${backendUrl}/publisher/fire`, {
+        const url = new URL(`${backendUrl}/agents/picks-publisher/run`)
+        url.searchParams.set('league', sport)
+        const res = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.CRON_SECRET}`,
             'X-Brand-Id': BRAND.slug,
           },
-          body: JSON.stringify({
-            brand_id: BRAND.slug,
-            league: sport,
-            game_date: today,
-            pick_count: confirmed.length,
-          }),
         })
+        if (!res.ok) {
+          // Log the status. The previous silent catch is how a 404 survived.
+          console.error('Publisher returned', res.status, await res.text())
+        }
       } catch (e) {
         console.error('Publisher trigger failed:', e)
-        // Non-fatal — picks are published, delivery will retry
+        // Non-fatal — rows are published; the sweep can be re-run by hand.
       }
     }
 
@@ -173,7 +229,10 @@ export async function POST(req: NextRequest) {
     .eq('brand_id', BRAND.slug)
     .eq('league', sport)
     .eq('player_name', playerName)
-    .eq('game_date', today)
+    // The PROJECTION's date, not today's. An NFL projection staged on a
+    // Wednesday is for a game on Sunday, so a `= today` match found no line
+    // and the whole add failed. Same defect the backend selector carried.
+    .eq('game_date', proj.game_date)
     .order('edge_pct', { ascending: false })
     .limit(1)
     .single()
@@ -206,7 +265,9 @@ export async function POST(req: NextRequest) {
     .insert({
       brand_id: BRAND.slug,
       league: sport,          // NOT NULL on picks_selections
-      game_date: today,
+      // The GAME's date. One NFL slate spans several, and a selection written
+      // under the run date would never match the game it belongs to.
+      game_date: proj.game_date,
       game_id: proj.game_id,
       player_name: proj.player_name,
       team: proj.team,
