@@ -88,30 +88,34 @@ export const BRAND = {
   },
 }
 
-export type TierSlug = 'free' | 'core' | 'signal' | 'analyst' | 'vector' | 'nexus'
-export type ToolKey  = 'projection_runner' | 'matchup_builder' | 'lineup_adjuster' | 'backtester'
-
-export const TIER_ORDER: TierSlug[] = ['free', 'core', 'signal', 'analyst', 'vector', 'nexus']
-
-export function tierIndex(tier: TierSlug): number {
-  return TIER_ORDER.indexOf(tier)
-}
-
-export function canAccess(userTier: TierSlug | null, required: TierSlug): boolean {
-  if (!userTier) return false
-  return tierIndex(userTier) >= tierIndex(required)
-}
-
-export const TOOL_MIN_TIERS: Record<ToolKey, TierSlug> = {
-  projection_runner: 'analyst',
-  matchup_builder:   'vector',
-  lineup_adjuster:   'vector',
-  backtester:        'nexus',
-}
-
-export function canUseTool(userTier: TierSlug | null, tool: ToolKey): boolean {
-  return canAccess(userTier, TOOL_MIN_TIERS[tool])
-}
+/**
+ * Tier vocabulary and gate logic live in ONE place: lib/picks/tiers.ts.
+ *
+ * This file previously re-declared TIER_ORDER, tierIndex, canAccess,
+ * TOOL_MIN_TIERS, canUseTool, TIER_FEATURES and hasFeature verbatim, plus its
+ * own copies of the TierSlug and ToolKey types — two sources of truth for
+ * access control, and a third for the types they are keyed on. api/picks
+ * imported BOTH, so the duplication was live, not dormant.
+ *
+ * Direction: lib/picks/tiers.ts is the source and brand.ts re-exports.
+ *   - tiers.ts already imports its types from lib/picks/types.ts, the domain
+ *     type home; keeping brand.ts as the source would have preserved the type
+ *     duplication as well as the logic duplication.
+ *   - Gate logic is domain logic. brand.ts is presentation config — colors,
+ *     fonts, tier marketing copy, promo codes.
+ *   - Re-exporting keeps every existing `@/config/brand` import working
+ *     unchanged, so collapsing to one definition cost zero call-site churn.
+ */
+export type { TierSlug, ToolKey } from '@/lib/picks/types'
+export {
+  TIER_ORDER,
+  tierIndex,
+  canAccess,
+  TOOL_MIN_TIERS,
+  canUseTool,
+  TIER_FEATURES,
+  hasFeature,
+} from '@/lib/picks/tiers'
 
 export function getTierBySlug(slug: string) {
   return BRAND.tiers.find(t => t.slug === slug) || null
@@ -119,53 +123,4 @@ export function getTierBySlug(slug: string) {
 
 export function getTierByPriceId(priceId: string) {
   return BRAND.tiers.find(t => t.stripePriceId === priceId) || null
-}
-
-export const TIER_FEATURES: Record<TierSlug, Record<string, boolean | number | null>> = {
-  free: {
-    daily_signals: false, signals_limit: 0, full_signal_slate: false,
-    accuracy_index: false, projection_viewer: false, projection_runner: false,
-    matchup_builder: false, lineup_adjuster: false, backtester: false,
-    early_access: false, guarantee: false, consulting: false,
-    insider_group: false, raw_export: false, custom_league_avgs: false,
-  },
-  core: {
-    daily_signals: true, signals_limit: 3, full_signal_slate: false,
-    accuracy_index: false, projection_viewer: false, projection_runner: false,
-    matchup_builder: false, lineup_adjuster: false, backtester: false,
-    early_access: false, guarantee: true, consulting: false,
-    insider_group: false, raw_export: false, custom_league_avgs: false,
-  },
-  signal: {
-    daily_signals: true, signals_limit: null, full_signal_slate: true,
-    accuracy_index: true, projection_viewer: true, projection_runner: false,
-    matchup_builder: false, lineup_adjuster: false, backtester: false,
-    early_access: false, guarantee: true, consulting: false,
-    insider_group: false, raw_export: false, custom_league_avgs: false,
-  },
-  analyst: {
-    daily_signals: true, signals_limit: null, full_signal_slate: true,
-    accuracy_index: true, projection_viewer: true, projection_runner: true,
-    matchup_builder: false, lineup_adjuster: false, backtester: false,
-    early_access: false, guarantee: true, consulting: false,
-    insider_group: false, raw_export: false, custom_league_avgs: false,
-  },
-  vector: {
-    daily_signals: true, signals_limit: null, full_signal_slate: true,
-    accuracy_index: true, projection_viewer: true, projection_runner: true,
-    matchup_builder: true, lineup_adjuster: true, backtester: false,
-    early_access: true, guarantee: true, consulting: false,
-    insider_group: true, raw_export: false, custom_league_avgs: false,
-  },
-  nexus: {
-    daily_signals: true, signals_limit: null, full_signal_slate: true,
-    accuracy_index: true, projection_viewer: true, projection_runner: true,
-    matchup_builder: true, lineup_adjuster: true, backtester: true,
-    early_access: true, guarantee: true, consulting: true,
-    insider_group: true, raw_export: true, custom_league_avgs: true,
-  },
-}
-
-export function hasFeature(tier: TierSlug, feature: string): boolean {
-  return !!TIER_FEATURES[tier]?.[feature]
 }

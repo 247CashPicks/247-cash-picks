@@ -1,4 +1,7 @@
+import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/service'
+import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
+import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +30,14 @@ async function getConfirmedPicks() {
 }
 
 export default async function PublishPage() {
+  // This page had no auth() at ALL — not even the login check the recon
+  // credited to middleware. Middleware does protect /dashboard/*, so it was
+  // not anonymous in practice, but the page asserted nothing itself and the
+  // publish button posts to an operator endpoint.
+  const { userId, tier } = await sessionTier()
+  if (!userId) redirect('/sign-in')
+  if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
+
   const picks = await getConfirmedPicks()
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',

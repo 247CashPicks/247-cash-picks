@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { guardOperatorRoute } from '@/lib/auth/guards'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getWalletForUser } from '@/lib/auth/session'
@@ -44,6 +45,13 @@ export async function GET(req: NextRequest) {
 
 // POST /api/picks — operator actions (add to selections, publish all)
 export async function POST(req: NextRequest) {
+  // This endpoint had NO auth of any kind. `publish_all` promotes confirmed
+  // selections into picks_published and is what subscribers pay to read, so
+  // an anonymous caller could publish the slate. Operator tier, same gate as
+  // the dashboard pages that post to it.
+  const denied = await guardOperatorRoute()
+  if (denied) return denied
+
   const body = await req.formData().catch(() => null)
   const jsonBody = body ? null : await req.json().catch(() => null)
 

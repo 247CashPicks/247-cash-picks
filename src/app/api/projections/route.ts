@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { guardRoute } from '@/lib/auth/guards'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 
 // GET /api/projections?date=2026-05-12&player=luka
 export async function GET(req: NextRequest) {
+  // Was fully public: the whole projection slate, the core paid product,
+  // readable by anyone who knew the path. Gated at 'signal', the tier whose
+  // TIER_FEATURES entry actually grants projection_viewer. No in-app caller
+  // exists (verified by grep), so this closes an open door rather than
+  // changing a working flow.
+  const denied = await guardRoute('signal', 'Signal tier or higher required')
+  if (denied) return denied
+
   const supabase = createServiceClient()
 
   const date = req.nextUrl.searchParams.get('date')

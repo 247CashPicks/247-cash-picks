@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { getWalletForUser } from '@/lib/auth/session'
+import { guardRoute, sessionTier } from '@/lib/auth/guards'
+import { TOOL_MIN_TIERS } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
-import type { TierSlug } from '@/lib/picks/types'
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // Checked login but never the tier. TOOL_MIN_TIERS.backtester is 'nexus',
+  // and the tools page renders it as locked below that — so the UI claimed a
+  // gate the API did not enforce.
+  const denied = await guardRoute(
+    TOOL_MIN_TIERS.backtester, 'Nexus tier required')
+  if (denied) return denied
 
-  const wallet = await getWalletForUser(userId)
-  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
+  // Re-read for the session log below. guardRoute has already established that
+  // userId is non-null and the tier clears nexus.
+  const { userId, tier } = await sessionTier()
 
   const supabase = createServiceClient()
 

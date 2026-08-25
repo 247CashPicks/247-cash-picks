@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { getWalletForUser } from '@/lib/auth/session'
+import { guardRoute, sessionTier } from '@/lib/auth/guards'
+import { TOOL_MIN_TIERS } from '@/lib/picks/tiers'
 import { runProjection } from '@/lib/picks/model'
 import { BRAND } from '@/config/brand'
-import type { TierSlug, ProjectionInputs } from '@/lib/picks/types'
+import type { ProjectionInputs } from '@/lib/picks/types'
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // NOT in the recon's list of four holes, but the same class: this route had
+  // login only. TOOL_MIN_TIERS.projection_runner is 'analyst' and the tools
+  // page renders the runner locked below that, so any signed-in free-tier
+  // account could still POST here and get a projection. The bare
+  // `tier !== 'nexus'` check further down guards only the league-average
+  // OVERRIDE, never entry to the route.
+  const denied = await guardRoute(
+    TOOL_MIN_TIERS.projection_runner, 'Analyst tier or higher required')
+  if (denied) return denied
 
-  const wallet = await getWalletForUser(userId)
-  const tier = (wallet?.tier_slug ?? 'core') as TierSlug
+  const { userId, tier } = await sessionTier()
 
   const supabase = createServiceClient()
 

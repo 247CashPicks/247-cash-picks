@@ -1,5 +1,6 @@
-import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
+import { canAccess } from '@/lib/picks/tiers'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 import AgentPipeline from './AgentPipeline'
@@ -62,8 +63,12 @@ const AGENTS = [
 ]
 
 export default async function DashboardPage() {
-  const { userId } = await auth()
+  // Was login-only: ANY signed-in member, including a free-tier account,
+  // could read the operator command centre — the full unpublished slate,
+  // every projection and line before it is released to paying tiers.
+  const { userId, tier } = await sessionTier()
   if (!userId) redirect('/sign-in')
+  if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
 
   const { projections, selections, lines } = await getDashboardData()
   const today = new Date().toLocaleDateString('en-US', {
