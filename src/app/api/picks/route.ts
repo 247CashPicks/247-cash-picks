@@ -6,6 +6,7 @@ import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
+import { projectionForStat, isProjectedStat } from '@/lib/picks/stats'
 import type { TierSlug } from '@/lib/picks/types'
 
 // GET /api/picks?date=2026-05-12
@@ -177,6 +178,29 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .single()
 
+  // Was: stat_type 'pts', line/our_projection from proj.proj_pts. All three
+  // are NBA-only. Under NFL proj_pts is NULL, and picks_selections
+  // .our_projection is NOT NULL, so staging an NFL projection did not degrade
+  // — it failed the insert outright with a 23502.
+  //
+  // The stat now comes from the market line, and the projection is derived
+  // from whichever picks_projections columns that stat is made of, the same
+  // mapping the backend's lines agent uses.
+  if (!line?.stat_type) {
+    return NextResponse.json(
+      { error: 'No market line for this player, so there is no stat to stage '
+             + 'against. Run the lines agent first.' }, { status: 409 })
+  }
+
+  const ourProjection = projectionForStat(proj, line.stat_type)
+  if (ourProjection == null) {
+    return NextResponse.json(
+      { error: `No projection exists for ${line.stat_type}`
+             + (isProjectedStat(line.stat_type) ? '.'
+               : ' — the engine does not project this stat, so it carries no '
+               + 'edge and cannot be staged.') }, { status: 409 })
+  }
+
   const { error: selError } = await supabase
     .from('picks_selections')
     .insert({
@@ -186,15 +210,15 @@ export async function POST(req: NextRequest) {
       game_id: proj.game_id,
       player_name: proj.player_name,
       team: proj.team,
-      stat_type: line?.stat_type || 'pts',
-      line: line?.line || proj.proj_pts,
-      our_projection: proj.proj_pts,
-      direction: line?.recommended_side || 'over',
-      edge_pct: line?.edge_pct || null,
+      stat_type: line.stat_type,
+      line: line.line,
+      our_projection: ourProjection,
+      direction: line.recommended_side || 'over',
+      edge_pct: line.edge_pct ?? null,
       confidence: proj.confidence_score >= 80 ? 'high'
         : proj.confidence_score >= 60 ? 'medium' : 'low',
       tier_required: 'core',
-      platform: line?.platform || 'prizepicks',
+      platform: line.platform || 'prizepicks',
       status: 'pending',
       display_order: 0,
     })

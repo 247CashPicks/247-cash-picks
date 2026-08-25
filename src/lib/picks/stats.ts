@@ -80,3 +80,86 @@ export function statLongLabel(stat: string): string {
 export function isProjectedStat(stat: string): boolean {
   return STAT_META[stat as StatType]?.projected ?? true
 }
+
+/** One column in the dashboard's projection table. */
+export interface ProjectionColumn {
+  /** picks_projections column name. */
+  key: string
+  label: string
+  digits: number
+}
+
+/**
+ * Which projection columns to show per sport.
+ *
+ * The NFL set is exactly the backend's PROJECTION_SELECT_COLS['NFL']
+ * (agents/picks_lines.py) — proj_targets, proj_receptions, proj_rec_yds,
+ * proj_carries, proj_rush_yds — so the table shows the columns the projector
+ * actually writes and nothing that would render as a column of dashes.
+ *
+ * MIN is NBA-only and absent from the NFL list: projected_minutes is a
+ * basketball concept, and sql/010's NFL columns carry no minutes analogue.
+ */
+export const PROJECTION_COLUMNS: Record<Sport, readonly ProjectionColumn[]> = {
+  NBA: [
+    { key: 'projected_minutes', label: 'MIN', digits: 0 },
+    { key: 'proj_pts',          label: 'PTS', digits: 1 },
+    { key: 'proj_reb',          label: 'REB', digits: 1 },
+    { key: 'proj_ast',          label: 'AST', digits: 1 },
+  ],
+  NFL: [
+    { key: 'proj_targets',    label: 'TGT',      digits: 1 },
+    { key: 'proj_receptions', label: 'REC',      digits: 1 },
+    { key: 'proj_rec_yds',    label: 'REC YDS',  digits: 1 },
+    { key: 'proj_carries',    label: 'CAR',      digits: 1 },
+    { key: 'proj_rush_yds',   label: 'RUSH YDS', digits: 1 },
+  ],
+}
+
+/**
+ * stat_type -> the picks_projections columns that make it up.
+ *
+ * Mirrors the backend's STAT_TO_PROJECTION_COLS (agents/picks_lines.py) so the
+ * frontend derives our_projection the same way the lines agent does. A
+ * combined stat sums its components and — following the backend rule — every
+ * component must be present, because an edge computed against half a number
+ * is worse than no edge.
+ *
+ * pass_yds maps to [] deliberately: the NFL engine projects pass attempts, not
+ * passing yards. It has no projection and never will.
+ */
+export const STAT_PROJECTION_COLUMNS: Record<StatType, readonly string[]> = {
+  pts: ['proj_pts'],
+  reb: ['proj_reb'],
+  ast: ['proj_ast'],
+  stl: ['proj_stl'],
+  blk: ['proj_blk'],
+  '3pm': ['proj_3pm'],
+  pts_reb_ast: ['proj_pts', 'proj_reb', 'proj_ast'],
+  rec_yds: ['proj_rec_yds'],
+  receptions: ['proj_receptions'],
+  rush_yds: ['proj_rush_yds'],
+  rush_rec_yds: ['proj_rush_yds', 'proj_rec_yds'],
+  pass_yds: [],
+}
+
+/**
+ * The projected value for a stat, or null when it cannot be formed.
+ *
+ * Null means "do not stage this" — picks_selections.our_projection is NOT
+ * NULL, so writing a null here is a 23502 that fails the whole insert.
+ */
+export function projectionForStat(
+  projection: Record<string, unknown>,
+  stat: string,
+): number | null {
+  const cols = STAT_PROJECTION_COLUMNS[stat as StatType]
+  if (!cols || cols.length === 0) return null
+  let sum = 0
+  for (const c of cols) {
+    const v = projection[c]
+    if (typeof v !== 'number') return null   // partial combined stat -> none
+    sum += v
+  }
+  return Math.round(sum * 10) / 10
+}

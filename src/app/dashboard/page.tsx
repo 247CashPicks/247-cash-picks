@@ -3,7 +3,7 @@ import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
 import { canAccess } from '@/lib/picks/tiers'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
-import { statLabel } from '@/lib/picks/stats'
+import { statLabel, PROJECTION_COLUMNS } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
 import AgentPipeline from './AgentPipeline'
@@ -76,9 +76,32 @@ export default async function DashboardPage() {
     weekday: 'long', month: 'long', day: 'numeric',
   })
 
-  const lineMap = new Map(
-    lines.map(l => [`${l.player_name}_${l.stat_type}`, l])
-  )
+  // The headline line for each player, i.e. the one the EDGE column reports.
+  //
+  // This used to be a `${player}_pts` lookup. NBA has a canonical headline
+  // stat, so that worked there — and can never match under NFL, where no
+  // 'pts' line exists and the column would read '—' for every row.
+  //
+  // NBA keeps the pts line, so nothing an operator is used to changes. NFL has
+  // no single headline stat (a WR's is rec_yds, a RB's rush_yds), so it shows
+  // the strongest edge available for that player, which is the one worth
+  // acting on.
+  const headline = new Map<string, typeof lines[number]>()
+  for (const l of lines) {
+    if (sport === 'NBA') {
+      if (l.stat_type === 'pts') headline.set(l.player_name, l)
+      continue
+    }
+    const held = headline.get(l.player_name)
+    const better = held == null
+      || Math.abs(l.edge_pct ?? 0) > Math.abs(held.edge_pct ?? 0)
+    if (better) headline.set(l.player_name, l)
+  }
+
+  const cols = PROJECTION_COLUMNS[sport]
+  // Header and body share one template so they cannot drift as the column
+  // count changes between sports (4 for NBA, 5 for NFL).
+  const grid = `2fr 60px ${cols.map(() => '80px').join(' ')} 80px 90px`
 
   const pendingCount   = selections.filter(s => s.status === 'pending').length
   const confirmedCount = selections.filter(s => s.status === 'confirmed').length
@@ -162,12 +185,12 @@ export default async function DashboardPage() {
               {/* Table header */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '2fr 60px 70px 70px 70px 80px 80px 90px',
+                gridTemplateColumns: grid,
                 padding: '9px 20px', borderBottom: `1px solid ${C.border}`,
                 fontFamily: F.mono, fontSize: '10px', fontWeight: 500,
                 color: C.dim, letterSpacing: '0.1em',
               }}>
-                {['PLAYER', 'POS', 'MIN', 'PTS', 'REB', 'AST', 'EDGE', 'ACTION'].map(h => (
+                {['PLAYER', 'POS', ...cols.map(c => c.label), 'EDGE', 'ACTION'].map(h => (
                   <div key={h}>{h}</div>
                 ))}
               </div>
@@ -179,7 +202,7 @@ export default async function DashboardPage() {
                 </div>
               ) : (
                 projections.map((p, i) => {
-                  const lineData = lineMap.get(`${p.player_name}_pts`)
+                  const lineData = headline.get(p.player_name)
                   const edgePct  = lineData?.edge_pct
                   const edgeColor = edgePct != null
                     ? edgePct >= 10 ? C.signalCyan
@@ -191,7 +214,7 @@ export default async function DashboardPage() {
                   return (
                     <div key={p.id} style={{
                       display: 'grid',
-                      gridTemplateColumns: '2fr 60px 70px 70px 70px 80px 80px 90px',
+                      gridTemplateColumns: grid,
                       padding: '11px 20px',
                       borderBottom: i < projections.length - 1 ? `1px solid ${C.border}` : 'none',
                       alignItems: 'center',
@@ -205,18 +228,19 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div style={{ fontFamily: F.mono, color: C.muted, fontSize: '12px' }}>{p.position || '—'}</div>
-                      <div style={{ fontFamily: F.mono, fontWeight: 500, color: C.platinum, fontSize: '13px' }}>
-                        {p.projected_minutes?.toFixed(0) || '—'}
-                      </div>
-                      <div style={{ fontFamily: F.mono, color: C.signalCyan, fontWeight: 500, fontSize: '13px' }}>
-                        {p.proj_pts?.toFixed(1) || '—'}
-                      </div>
-                      <div style={{ fontFamily: F.mono, color: C.platinum, fontWeight: 500, fontSize: '13px' }}>
-                        {p.proj_reb?.toFixed(1) || '—'}
-                      </div>
-                      <div style={{ fontFamily: F.mono, color: C.muted, fontWeight: 500, fontSize: '13px' }}>
-                        {p.proj_ast?.toFixed(1) || '—'}
-                      </div>
+                      {cols.map((c, ci) => {
+                        const v = (p as Record<string, unknown>)[c.key]
+                        return (
+                          <div key={c.key} style={{
+                            fontFamily: F.mono, fontWeight: 500, fontSize: '13px',
+                            color: ci === 0 ? C.platinum
+                              : ci === 1 ? C.signalCyan
+                              : ci === 2 ? C.platinum : C.muted,
+                          }}>
+                            {typeof v === 'number' ? v.toFixed(c.digits) : '—'}
+                          </div>
+                        )
+                      })}
                       <div style={{ fontFamily: F.mono, color: edgeColor, fontWeight: 500, fontSize: '12px' }}>
                         {edgePct != null ? `${edgePct > 0 ? '+' : ''}${edgePct.toFixed(1)}%` : '—'}
                       </div>
