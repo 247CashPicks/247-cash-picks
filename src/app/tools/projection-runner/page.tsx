@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { BRAND } from '@/config/brand'
+import { useSport } from '@/lib/sport/client'
 import { runProjection, LEAGUE_DEFAULTS } from '@/lib/picks/model'
 import type { ProjectionInputs, ProjectionOutputs } from '@/lib/picks/types'
 
@@ -127,6 +128,9 @@ function FactorBar({ label, value, neutral = 1.0 }: {
 }
 
 export default function ProjectionRunnerPage() {
+  // Hiding the tool card is not enough — this route is reachable by URL, and
+  // the engine below would happily return a number for football inputs.
+  const sport = useSport()
   const [inputs, setInputs] = useState<ProjectionInputs>(DEFAULT_INPUTS)
   const [overrides, setOverrides] = useState<Set<string>>(new Set())
   const [output, setOutput] = useState<ProjectionOutputs | null>(null)
@@ -328,6 +332,36 @@ export default function ProjectionRunnerPage() {
   }, [])
 
   const matchupShare = inputs.matchupShare ?? LEAGUE_DEFAULTS.matchupShare
+
+  if (sport !== 'NBA') {
+    return (
+      <div style={{ background: C.void, minHeight: '100vh', paddingTop: '56px' }}>
+        <div style={{
+          maxWidth: '640px', margin: '0 auto', padding: '64px 24px',
+          fontFamily: F.mono, color: C.muted, fontSize: '13px', lineHeight: 1.8,
+        }}>
+          <div style={{ color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '14px' }}>
+            // NBA-ONLY INSTRUMENT
+          </div>
+          <p style={{ marginTop: 0 }}>
+            The projection runner is a basketball engine — per-36 over minutes,
+            scaled by pace, defensive rating and rebound suppression. There is
+            no meaningful way to feed {sport} inputs through it.
+          </p>
+          <p>
+            {sport} projections are computed server-side by the backend engine
+            and land in <code>picks_projections</code>. Read them on the{' '}
+            <a href="/dashboard" style={{ color: C.signalCyan }}>pipeline dashboard</a>{' '}
+            or as staged signals on{' '}
+            <a href="/picks" style={{ color: C.signalCyan }}>signals</a>.
+          </p>
+          <p style={{ color: C.faint }}>
+            Switch to NBA in the top bar to use this tool.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ background: C.void, minHeight: '100vh' }}>

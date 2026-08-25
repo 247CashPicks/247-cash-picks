@@ -104,7 +104,14 @@ export const SPORT_CONFIG: Record<Sport, SportConfig> = {
     hasMinutes: false,
     // Shared-floor combos over on-court minutes and 1-on-1 defender iso
     // matchups are basketball concepts. Gated here rather than ported.
-    hiddenTools: ['lineup_adjuster', 'matchup_builder'],
+    //
+    // projection_runner is here for a different reason: lib/picks/model.ts is
+    // a basketball engine to the constant (pace 99.3, def rating 115.5,
+    // rebound suppression), and the NFL engine lives BACKEND-side in
+    // engine/projection_nfl.py. Running the NBA formula over NFL inputs would
+    // not fail — it would return a confident, meaningless number, which is
+    // worse. Hidden rather than ported.
+    hiddenTools: ['lineup_adjuster', 'matchup_builder', 'projection_runner'],
   },
 }
 
