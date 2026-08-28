@@ -3,18 +3,11 @@ import { auth } from '@clerk/nextjs/server'
 import { getWalletForUser } from '@/lib/auth/session'
 import { canAccess } from '@/lib/picks/tiers'
 import type { TierSlug } from '@/lib/picks/types'
+import { parseSport } from '@/lib/sport'
+import { agentFor } from '@/lib/picks/agents'
 
 const BACKEND_URL = process.env.BACKEND_URL || ''
 const CRON_SECRET = process.env.CRON_SECRET || 'cashpicks-cron-2026'
-
-// Allowlist — prevents arbitrary path injection into the backend URL.
-const ALLOWED_AGENTS = [
-  'scout', 'stats', 'matchup', 'defense', 'projector', 'lines', 'selector',
-] as const
-
-// These scrape LIVE-ONLY sources (Court-IQ / RotoWire / DFS boards). Running them
-// with a historical date would write today's board onto a past slate. Blocked.
-const LIVE_ONLY_AGENTS: string[] = ['stats', 'defense', 'lines']
 
 // Vercel's proxy caps around 55s; stop waiting before that and report honestly.
 const DISPATCH_TIMEOUT_MS = 45000
@@ -30,27 +23,39 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}))
-  const agent = String(body.agent ?? '')
+  const agentKey = String(body.agent ?? '')
+  const sport = parseSport(typeof body.sport === 'string' ? body.sport : null)
   const date = typeof body.date === 'string' ? body.date.trim() : ''
 
-  if (!(ALLOWED_AGENTS as readonly string[]).includes(agent)) {
-    return NextResponse.json({ error: `Unknown agent: ${agent}` }, { status: 400 })
+  // The registry keyed by (sport, key) is the allowlist: an unknown key OR a
+  // key that does not belong to this sport (e.g. 'stats' under NFL, 'nfl-scout'
+  // under NBA) resolves to undefined and is rejected. This also guarantees the
+  // backend path is one we defined, not one assembled from arbitrary input.
+  const def = agentFor(sport, agentKey)
+  if (!def) {
+    return NextResponse.json(
+      { error: `Unknown agent '${agentKey}' for ${sport}` },
+      { status: 400 },
+    )
   }
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ error: 'date must be YYYY-MM-DD' }, { status: 400 })
   }
-  if (date && LIVE_ONLY_AGENTS.includes(agent)) {
+  if (date && def.liveOnly) {
     return NextResponse.json({
-      error: `${agent} reads live-only sources — running it with a past date would ` +
-             `write today's board onto that slate. Run it without a date.`,
+      error: `${def.label} reads a live-only source — running it with a past date ` +
+             `would overwrite the current board onto that slate. Run it without a date.`,
     }, { status: 400 })
   }
   if (!BACKEND_URL) {
     return NextResponse.json({ error: 'BACKEND_URL not configured' }, { status: 500 })
   }
 
-  const url = `${BACKEND_URL}/agents/picks-${agent}/run` +
-              (date ? `?date=${encodeURIComponent(date)}` : '')
+  const params = new URLSearchParams()
+  if (date) params.set('date', date)
+  if (def.leagueParam) params.set('league', sport)
+  const qs = params.toString()
+  const url = `${BACKEND_URL}/agents/${def.backendPath}/run${qs ? `?${qs}` : ''}`
   const started = Date.now()
 
   try {
@@ -69,13 +74,13 @@ export async function POST(req: NextRequest) {
 
     if (!res.ok) {
       return NextResponse.json(
-        { ok: false, agent, date: date || null, status: res.status, detail: result },
+        { ok: false, agent: agentKey, sport, date: date || null, status: res.status, detail: result },
         { status: 502 },
       )
     }
 
     return NextResponse.json({
-      ok: true, agent, date: date || null,
+      ok: true, agent: agentKey, sport, date: date || null,
       elapsed_ms: Date.now() - started,
       result,
     })
@@ -86,11 +91,11 @@ export async function POST(req: NextRequest) {
     if (isTimeout) {
       // Railway keeps running to completion — we just stopped waiting.
       return NextResponse.json({
-        ok: true, agent, date: date || null,
+        ok: true, agent: agentKey, sport, date: date || null,
         dispatched: true, still_running: true,
         note: 'Agent still running on Railway — exceeded the 45s wait window.',
       })
     }
-    return NextResponse.json({ ok: false, agent, error: message }, { status: 500 })
+    return NextResponse.json({ ok: false, agent: agentKey, sport, error: message }, { status: 500 })
   }
 }

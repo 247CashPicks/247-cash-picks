@@ -6,6 +6,7 @@ import { BRAND } from '@/config/brand'
 import { statLabel } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
+import ConfirmedQueuePanel, { type ConfirmedPick } from './ConfirmedQueuePanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -255,81 +256,11 @@ export default async function PublishPage() {
                     // {picks.length} SIGNAL{picks.length !== 1 ? 'S' : ''} TO TRANSMIT
                   </div>
                   <span style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
-                    SORTED BY DISPLAY ORDER
+                    {sport}
                   </span>
                 </div>
 
-                {picks.map((pick, i) => (
-                  <div key={pick.id} style={{
-                    padding: '18px 24px',
-                    borderBottom: i < picks.length - 1 ? `1px solid ${C.border}` : 'none',
-                    display: 'grid',
-                    gridTemplateColumns: '2fr 90px 80px 100px 80px 90px 100px 80px',
-                    alignItems: 'center', gap: '12px',
-                  }}>
-                    <div>
-                      <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '15px', color: C.platinum }}>
-                        {pick.player_name}
-                      </div>
-                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, marginTop: '2px' }}>
-                        {pick.team} · {pick.platform}
-                      </div>
-                    </div>
-                    <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.muted, letterSpacing: '0.04em' }}>
-                      {pick.game_date}
-                    </div>
-                    <div style={{
-                      fontFamily: F.mono, fontSize: '15px', fontWeight: 500,
-                      color: C.platinum,
-                      letterSpacing: '0.06em',
-                    }}>
-                      {statLabel(pick.stat_type ?? '')}
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{
-                        fontFamily: F.mono, fontSize: '20px', fontWeight: 500,
-                        color: pick.direction === 'over' ? C.signalCyan : C.platinum,
-                        letterSpacing: '0.04em',
-                      }}>
-                        {pick.direction?.toUpperCase()}
-                      </div>
-                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>
-                        LINE: {pick.line}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontFamily: F.mono, fontWeight: 500, fontSize: '15px', color: C.platinum }}>
-                        {pick.our_projection}
-                      </div>
-                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>PROJ</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{
-                        fontFamily: F.mono, fontWeight: 500, fontSize: '15px',
-                        color: pick.edge_pct == null ? C.muted
-                          : pick.edge_pct >= 10 ? C.signalCyan
-                          : pick.edge_pct > 0 ? C.platinum : C.flagAmber,
-                      }}>
-                        {pick.edge_pct == null
-                          ? '—'
-                          : `${pick.edge_pct > 0 ? '+' : ''}${Number(pick.edge_pct).toFixed(1)}%`}
-                      </div>
-                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, marginTop: '2px' }}>EDGE</div>
-                    </div>
-                    <div style={{
-                      textAlign: 'center', padding: '5px 8px',
-                      border: `1px solid ${pick.confidence === 'high' ? C.borderEmphasis : C.border}`,
-                      fontFamily: F.mono, fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em',
-                      color: pick.confidence === 'high' ? C.signalCyan : C.platinum,
-                      textTransform: 'uppercase' as const,
-                    }}>
-                      {pick.confidence}
-                    </div>
-                    <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, textAlign: 'right', letterSpacing: '0.06em' }}>
-                      {pick.tier_required}+
-                    </div>
-                  </div>
-                ))}
+                <ConfirmedQueuePanel rows={picks as ConfirmedPick[]} sport={sport} />
               </div>
 
               {/* Delivery summary */}

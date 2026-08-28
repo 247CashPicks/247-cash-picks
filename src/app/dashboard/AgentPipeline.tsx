@@ -3,15 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BRAND } from '@/config/brand'
+import type { AgentDef } from '@/lib/picks/agents'
+import type { Sport } from '@/lib/sport'
 
 const C = BRAND.colors
 const F = BRAND.fonts
 
-export interface AgentDef { key: string; label: string; time: string; glyph: string }
 type Status = 'idle' | 'running' | 'ok' | 'error'
 interface RunState { status: Status; message?: string }
-
-const LIVE_ONLY = ['stats', 'defense', 'lines']
 
 function summarize(result: unknown): string {
   if (result == null) return 'done'
@@ -29,10 +28,21 @@ function summarize(result: unknown): string {
   return String(result)
 }
 
-export default function AgentPipeline({ agents }: { agents: AgentDef[] }) {
+export default function AgentPipeline(
+  { agents, sport }: { agents: readonly AgentDef[]; sport: Sport },
+) {
   const router = useRouter()
   const [runDate, setRunDate] = useState('')
   const [state, setState] = useState<Record<string, RunState>>({})
+
+  // Which agents refuse a historical date, named for the warning banner. Comes
+  // from the same registry the dispatch route reads, so the UI cannot claim a
+  // different live-only set than the server enforces.
+  const liveOnlyLabels = agents.filter(a => a.liveOnly).map(a => a.label).join(' / ')
+
+  // NFL has no cron — the cards carry a weekly cadence, and this note makes
+  // explicit that nothing fires on its own; the operator triggers each run.
+  const operatorRun = sport === 'NFL'
 
   async function runAgent(key: string) {
     setState(s => ({ ...s, [key]: { status: 'running' } }))
@@ -40,7 +50,7 @@ export default function AgentPipeline({ agents }: { agents: AgentDef[] }) {
       const res = await fetch('/api/operator/run-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent: key, date: runDate || undefined }),
+        body: JSON.stringify({ agent: key, sport, date: runDate || undefined }),
       })
       const data = await res.json()
       if (!res.ok || data.ok === false) {
@@ -64,6 +74,11 @@ export default function AgentPipeline({ agents }: { agents: AgentDef[] }) {
         <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em' }}>
           // AGENT PIPELINE
         </div>
+        {operatorRun && (
+          <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.faint, letterSpacing: '0.08em' }}>
+            {sport} — WEEKLY · OPERATOR-RUN (no cron; you trigger each run)
+          </div>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontFamily: F.mono, fontSize: '10px', color: C.faint, letterSpacing: '0.08em' }}>
             TARGET DATE
@@ -91,19 +106,19 @@ export default function AgentPipeline({ agents }: { agents: AgentDef[] }) {
         </div>
       </div>
 
-      {runDate && (
+      {runDate && liveOnlyLabels && (
         <div style={{
           fontFamily: F.mono, fontSize: '10px', color: C.flagAmber,
           marginBottom: '12px', letterSpacing: '0.04em',
         }}>
-          ⚠ historical mode — stats / defense / lines are blocked (live-only sources)
+          ⚠ historical mode — {liveOnlyLabels} {agents.filter(a => a.liveOnly).length === 1 ? 'is' : 'are'} blocked (live-only sources)
         </div>
       )}
 
       <div className="agent-grid">
         {agents.map(agent => {
           const st = state[agent.key]
-          const blocked = !!runDate && LIVE_ONLY.includes(agent.key)
+          const blocked = !!runDate && agent.liveOnly
           const busy = st?.status === 'running'
           return (
             <div key={agent.key} style={{

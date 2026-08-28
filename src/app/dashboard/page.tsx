@@ -3,10 +3,13 @@ import { sessionTier, OPERATOR_TIER } from '@/lib/auth/guards'
 import { canAccess } from '@/lib/picks/tiers'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
-import { statLabel, PROJECTION_COLUMNS } from '@/lib/picks/stats'
+import { PROJECTION_COLUMNS } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
-import type { Sport } from '@/lib/sport'
+import { sportConfig, type Sport } from '@/lib/sport'
+import { AGENTS_BY_SPORT } from '@/lib/picks/agents'
 import AgentPipeline from './AgentPipeline'
+import ProjectionsPanel, { type ProjRow } from './ProjectionsPanel'
+import SignalQueuePanel, { type Selection } from './SignalQueuePanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,53 +17,105 @@ const C = BRAND.colors
 const F = BRAND.fonts
 
 
+// What the board is showing. NBA is always a single day (today); NFL is an
+// upcoming window that can span one or more weeks, labelled from the actual
+// game weeks in the data rather than from "today".
+type Slate =
+  | { kind: 'day' }
+  | { kind: 'window'; label: string; range: string }
+
+const fmtDay = (d: string) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', timeZone: 'UTC',
+  })
+
+function describeSlate(
+  windowDays: number,
+  projections: { game_date?: string | null }[],
+  games: { game_date: string; week: number | null }[],
+): Slate {
+  if (windowDays === 0) return { kind: 'day' }
+
+  const dates = [...new Set(
+    projections.map(p => p.game_date).filter((d): d is string => !!d),
+  )].sort()
+  const inSlate = new Set(dates)
+  const weeks = [...new Set(
+    games.filter(g => inSlate.has(g.game_date))
+         .map(g => g.week)
+         .filter((w): w is number => w != null),
+  )].sort((a, b) => a - b)
+
+  // Prefer the week number (WEEK 1) an operator thinks in; fall back to the
+  // date range if the games table has no week for these dates.
+  const label = weeks.length === 0
+    ? 'UPCOMING SLATE'
+    : weeks.length === 1
+      ? `WEEK ${weeks[0]}`
+      : `WEEKS ${weeks[0]}–${weeks[weeks.length - 1]}`
+
+  const range = dates.length === 0
+    ? ''
+    : dates.length === 1
+      ? fmtDay(dates[0])
+      : `${fmtDay(dates[0])} – ${fmtDay(dates[dates.length - 1])}`
+
+  return { kind: 'window', label, range }
+}
+
 async function getDashboardData(sport: Sport) {
   const supabase = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
+  const windowDays = sportConfig(sport).slateWindowDays
+  // NBA: today only, unchanged. NFL: the upcoming window [today, today + N] —
+  // a whole week stages at once, so a same-day filter showed an empty board on
+  // five days out of six while ten selections sat waiting.
+  const upper = windowDays > 0
+    ? new Date(Date.parse(today) + windowDays * 86_400_000).toISOString().split('T')[0]
+    : today
 
-  const [projectionsRes, selectionsRes, linesRes] = await Promise.all([
-    supabase
-      .from('picks_projections')
-      .select('*')
-      .eq('brand_id', BRAND.slug)
-      .eq('league', sport)
-      .eq('game_date', today)
-      .order('confidence_score', { ascending: false }),
+  let projQ = supabase
+    .from('picks_projections').select('*')
+    .eq('brand_id', BRAND.slug).eq('league', sport)
+  projQ = windowDays > 0
+    ? projQ.gte('game_date', today).lte('game_date', upper)
+    : projQ.eq('game_date', today)
 
-    supabase
-      .from('picks_selections')
-      .select('*')
-      .eq('brand_id', BRAND.slug)
-      .eq('league', sport)
-      .eq('game_date', today)
-      .in('status', ['pending', 'confirmed'])
-      .order('display_order', { ascending: true }),
+  let selQ = supabase
+    .from('picks_selections').select('*')
+    .eq('brand_id', BRAND.slug).eq('league', sport)
+    .in('status', ['pending', 'confirmed'])
+  selQ = windowDays > 0
+    ? selQ.gte('game_date', today).lte('game_date', upper)
+    : selQ.eq('game_date', today)
 
-    supabase
-      .from('picks_lines')
-      .select('player_name, stat_type, line, platform, edge_pct, recommended_side')
-      .eq('brand_id', BRAND.slug)
-      .eq('league', sport)
-      .eq('game_date', today)
-      .order('edge_pct', { ascending: false }),
+  let lineQ = supabase
+    .from('picks_lines')
+    .select('player_name, stat_type, line, platform, edge_pct, recommended_side')
+    .eq('brand_id', BRAND.slug).eq('league', sport)
+  lineQ = windowDays > 0
+    ? lineQ.gte('game_date', today).lte('game_date', upper)
+    : lineQ.eq('game_date', today)
+
+  const [projectionsRes, selectionsRes, linesRes, gamesRes] = await Promise.all([
+    projQ.order('game_date', { ascending: true }).order('confidence_score', { ascending: false }),
+    selQ.order('game_date', { ascending: true }).order('display_order', { ascending: true }),
+    lineQ.order('edge_pct', { ascending: false }),
+    windowDays > 0
+      ? supabase.from('picks_games').select('game_date, week')
+          .eq('brand_id', BRAND.slug).eq('league', sport)
+          .gte('game_date', today).lte('game_date', upper)
+      : Promise.resolve({ data: [] as { game_date: string; week: number | null }[] }),
   ])
 
+  const projections = projectionsRes.data || []
   return {
-    projections: projectionsRes.data || [],
-    selections:  selectionsRes.data  || [],
-    lines:       linesRes.data       || [],
+    projections,
+    selections: selectionsRes.data || [],
+    lines:      linesRes.data      || [],
+    slate:      describeSlate(windowDays, projections, gamesRes.data || []),
   }
 }
-
-const AGENTS = [
-  { key: 'scout',     label: 'Scout',     time: '6:00 AM ET',  glyph: '◈' },
-  { key: 'stats',     label: 'Stats',     time: '8:00 AM ET',  glyph: 'Σ' },
-  { key: 'matchup',   label: 'Matchup',   time: '9:00 AM ET',  glyph: '⬡' },
-  { key: 'defense',   label: 'Defense',   time: '9:30 AM ET',  glyph: '◉' },
-  { key: 'projector', label: 'Projector', time: '10:00 AM ET', glyph: '◆' },
-  { key: 'lines',     label: 'Lines',     time: '2:00 PM ET',  glyph: '↗' },
-  { key: 'selector',  label: 'Selector',  time: '2:30 PM ET',  glyph: '›' },
-]
 
 export default async function DashboardPage() {
   // Was login-only: ANY signed-in member, including a free-tier account,
@@ -71,7 +126,7 @@ export default async function DashboardPage() {
   if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
 
   const sport = await getSport()
-  const { projections, selections, lines } = await getDashboardData(sport)
+  const { projections, selections, lines, slate } = await getDashboardData(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
@@ -99,9 +154,13 @@ export default async function DashboardPage() {
   }
 
   const cols = PROJECTION_COLUMNS[sport]
-  // Header and body share one template so they cannot drift as the column
-  // count changes between sports (4 for NBA, 5 for NFL).
-  const grid = `2fr 60px ${cols.map(() => '80px').join(' ')} 80px 90px`
+
+  // Enrich each projection with the headline line's edge + stat so the client
+  // panel can filter/sort on them (the projection row itself carries neither).
+  const projRows: ProjRow[] = projections.map(p => {
+    const h = headline.get(p.player_name)
+    return { ...p, _edgePct: h?.edge_pct ?? null, _headlineStat: h?.stat_type ?? null }
+  })
 
   const pendingCount   = selections.filter(s => s.status === 'pending').length
   const confirmedCount = selections.filter(s => s.status === 'confirmed').length
@@ -130,10 +189,12 @@ export default async function DashboardPage() {
                 fontFamily: F.sans, fontSize: 'clamp(18px,2.2vw,26px)', fontWeight: 500,
                 color: C.platinum, margin: '0 0 6px', lineHeight: 1, letterSpacing: '-0.03em',
               }}>
-                {today.toUpperCase()}
+                {slate.kind === 'window' ? slate.label : today.toUpperCase()}
               </h1>
               <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, letterSpacing: '0.04em' }}>
-                {'> dashboard --operator=true --live=true'}
+                {slate.kind === 'window'
+                  ? `${slate.range ? `${slate.range} · ` : ''}${sport} operator-run weekly slate`
+                  : '> dashboard --operator=true --live=true'}
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -164,7 +225,7 @@ export default async function DashboardPage() {
 
         <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(24px,2.5vw,36px) clamp(24px,4vw,48px)' }}>
 
-          <AgentPipeline agents={AGENTS} />
+          <AgentPipeline agents={AGENTS_BY_SPORT[sport]} sport={sport} />
 
           <div className="dashboard-layout">
 
@@ -172,98 +233,26 @@ export default async function DashboardPage() {
             <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
               <div style={{
                 padding: '14px 20px', borderBottom: `1px solid ${C.border}`,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
                 <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em' }}>
-                  // TODAY&apos;S PROJECTIONS
+                  // {slate.kind === 'window' ? `${slate.label} PROJECTIONS` : `TODAY'S PROJECTIONS`}
                 </div>
-                <span style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
-                  {projections.length} PLAYERS — SORTED BY EDGE
-                </span>
-              </div>
-
-              {/* Table header */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: grid,
-                padding: '9px 20px', borderBottom: `1px solid ${C.border}`,
-                fontFamily: F.mono, fontSize: '10px', fontWeight: 500,
-                color: C.dim, letterSpacing: '0.1em',
-              }}>
-                {['PLAYER', 'POS', ...cols.map(c => c.label), 'EDGE', 'ACTION'].map(h => (
-                  <div key={h}>{h}</div>
-                ))}
               </div>
 
               {projections.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', fontFamily: F.mono, color: C.muted, fontSize: '13px', lineHeight: 1.7 }}>
-                  No projections yet today.<br />
-                  Run the Scout agent at 6 AM to begin the pipeline.
+                  {slate.kind === 'window' ? (
+                    <>No projections for the upcoming {sport} slate yet.<br />
+                    Run the pipeline above to begin.</>
+                  ) : (
+                    <>No projections yet today.<br />
+                    Run the Scout agent at 6 AM to begin the pipeline.</>
+                  )}
                 </div>
               ) : (
-                projections.map((p, i) => {
-                  const lineData = headline.get(p.player_name)
-                  const edgePct  = lineData?.edge_pct
-                  const edgeColor = edgePct != null
-                    ? edgePct >= 10 ? C.signalCyan
-                    : edgePct >= 5  ? C.platinum
-                    : edgePct < 0   ? C.flagAmber
-                    : C.muted
-                    : C.muted
-
-                  return (
-                    <div key={p.id} style={{
-                      display: 'grid',
-                      gridTemplateColumns: grid,
-                      padding: '11px 20px',
-                      borderBottom: i < projections.length - 1 ? `1px solid ${C.border}` : 'none',
-                      alignItems: 'center',
-                    }}>
-                      <div>
-                        <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '13px', color: C.platinum }}>
-                          {p.player_name}
-                        </div>
-                        <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim }}>
-                          {p.team} · {p.is_starter ? 'Starter' : 'Bench'}
-                        </div>
-                      </div>
-                      <div style={{ fontFamily: F.mono, color: C.muted, fontSize: '12px' }}>{p.position || '—'}</div>
-                      {cols.map((c, ci) => {
-                        const v = (p as Record<string, unknown>)[c.key]
-                        return (
-                          <div key={c.key} style={{
-                            fontFamily: F.mono, fontWeight: 500, fontSize: '13px',
-                            color: ci === 0 ? C.platinum
-                              : ci === 1 ? C.signalCyan
-                              : ci === 2 ? C.platinum : C.muted,
-                          }}>
-                            {typeof v === 'number' ? v.toFixed(c.digits) : '—'}
-                          </div>
-                        )
-                      })}
-                      <div style={{ fontFamily: F.mono, color: edgeColor, fontWeight: 500, fontSize: '12px' }}>
-                        {edgePct != null ? `${edgePct > 0 ? '+' : ''}${edgePct.toFixed(1)}%` : '—'}
-                      </div>
-                      <div>
-                        <form action="/api/picks" method="POST">
-                          <input type="hidden" name="player_name"   value={p.player_name} />
-                          <input type="hidden" name="projection_id" value={p.id} />
-                          <button
-                            type="submit"
-                            style={{
-                              background: 'transparent', border: `1px solid ${C.borderEmphasis}`,
-                              padding: '5px 10px', color: C.signalCyan,
-                              fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
-                              letterSpacing: '0.08em', cursor: 'pointer',
-                            }}
-                          >
-                            + ADD
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-                  )
-                })
+                <div style={{ padding: '14px 20px' }}>
+                  <ProjectionsPanel rows={projRows} cols={cols} sport={sport} />
+                </div>
               )}
             </div>
 
@@ -284,66 +273,19 @@ export default async function DashboardPage() {
                   Add signals from the projections table.
                 </div>
               ) : (
-                <div>
-                  {selections.map((s, i) => (
-                    <div key={s.id} style={{
-                      padding: '14px 20px',
-                      borderBottom: i < selections.length - 1 ? `1px solid ${C.border}` : 'none',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                        <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '14px', color: C.platinum }}>
-                          {s.player_name}
-                        </div>
-                        <span style={{
-                          fontFamily: F.mono, fontSize: '10px', fontWeight: 500, letterSpacing: '0.08em',
-                          color: s.status === 'confirmed' ? C.signalCyan : C.flagAmber,
-                          border: `1px solid ${s.status === 'confirmed' ? C.borderEmphasis : 'rgba(232,163,61,0.3)'}`,
-                          padding: '2px 8px',
-                          textTransform: 'uppercase' as const,
-                        }}>
-                          {s.status}
-                        </span>
-                      </div>
-                      <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.muted, marginBottom: '8px', letterSpacing: '0.04em' }}>
-                        {statLabel(s.stat_type ?? '')} {s.direction?.toUpperCase()} {s.line}
-                        {' · '}{s.platform}
-                        {s.edge_pct && (
-                          <span style={{ color: C.signalCyan, fontWeight: 500 }}>
-                            {' '}(+{s.edge_pct.toFixed(1)}% edge)
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <span style={{
-                          fontFamily: F.mono, fontSize: '10px', color: C.dim,
-                          border: `1px solid ${C.border}`, padding: '2px 8px',
-                          textTransform: 'capitalize' as const, letterSpacing: '0.06em',
-                        }}>
-                          {s.confidence}
-                        </span>
-                        <span style={{
-                          fontFamily: F.mono, fontSize: '10px', color: C.dim,
-                          border: `1px solid ${C.border}`, padding: '2px 8px',
-                          letterSpacing: '0.06em',
-                        }}>
-                          {s.tier_required}+
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                <SignalQueuePanel rows={selections as Selection[]} sport={sport} />
+              )}
 
-                  {confirmedCount > 0 && (
-                    <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.border}` }}>
-                      <a href="/dashboard/publish" style={{
-                        display: 'block', textAlign: 'center',
-                        background: C.signalCyan, color: C.void,
-                        padding: '12px', fontFamily: F.mono, fontWeight: 500,
-                        fontSize: '13px', letterSpacing: '0.12em',
-                      }}>
-                        TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
-                      </a>
-                    </div>
-                  )}
+              {confirmedCount > 0 && (
+                <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.border}` }}>
+                  <a href="/dashboard/publish" style={{
+                    display: 'block', textAlign: 'center',
+                    background: C.signalCyan, color: C.void,
+                    padding: '12px', fontFamily: F.mono, fontWeight: 500,
+                    fontSize: '13px', letterSpacing: '0.12em',
+                  }}>
+                    TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
+                  </a>
                 </div>
               )}
             </div>

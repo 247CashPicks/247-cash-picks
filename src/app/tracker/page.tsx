@@ -2,9 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
-import { statLabel } from '@/lib/picks/stats'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
+import ResolutionLog, { type ResultRow } from './ResolutionLog'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -23,24 +23,35 @@ async function getWinRateStats(sport: Sport) {
   return data || []
 }
 
+// The ledger is a history view, so it loads a date window rather than a fixed
+// row count — the from/to filter in ResolutionLog then narrows within it. The
+// cap bounds an otherwise unbounded scan; when it bites, the UI says so rather
+// than silently dropping the oldest rows.
+const LEDGER_WINDOW_DAYS = 30
+const LEDGER_CAP = 500
+
 async function getRecentResults(sport: Sport) {
   const supabase = createServiceClient()
+  const from = new Date(Date.now() - LEDGER_WINDOW_DAYS * 86_400_000).toISOString().split('T')[0]
   const { data } = await supabase
     .from('picks_published')
     .select('player_name, team, stat_type, line, direction, result, actual_value, game_date, our_projection, confidence')
     .eq('brand_id', BRAND.slug)
     .eq('league', sport)
+    .gte('game_date', from)
     .order('game_date', { ascending: false })
-    .limit(50)
-  return data || []
+    .limit(LEDGER_CAP)
+  const rows = data || []
+  return { rows, capped: rows.length >= LEDGER_CAP }
 }
 
 export default async function TrackerPage() {
   const sport = await getSport()
-  const [stats, results] = await Promise.all([
+  const [stats, ledger] = await Promise.all([
     getWinRateStats(sport),
     getRecentResults(sport),
   ])
+  const results = ledger.rows
 
   const resolved = stats.filter(s => s.result === 'hit' || s.result === 'miss')
   const hits     = resolved.filter(s => s.result === 'hit').length
@@ -162,73 +173,25 @@ export default async function TrackerPage() {
                 // RESOLUTION LOG
               </div>
               <span style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
-                LAST {results.length} SIGNALS
+                LAST {LEDGER_WINDOW_DAYS} DAYS
               </span>
             </div>
 
-            {/* Table header */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 80px 80px 80px 80px 80px',
-              padding: '10px 24px',
-              borderBottom: `1px solid ${C.border}`,
-              fontFamily: F.mono, fontSize: '10px', fontWeight: 500,
-              color: C.dim, letterSpacing: '0.1em',
-            }}>
-              {['PLAYER', 'STAT', 'LINE', 'SIGNAL', 'PROJ', 'RESULT'].map(h => <div key={h}>{h}</div>)}
-            </div>
+            {ledger.capped && (
+              <div style={{
+                padding: '10px 24px', borderBottom: `1px solid ${C.border}`,
+                fontFamily: F.mono, fontSize: '11px', color: C.flagAmber, letterSpacing: '0.04em',
+              }}>
+                ⚠ Showing the most recent {LEDGER_CAP} resolved signals in this window — older rows are not loaded. Narrow the date range to inspect earlier history.
+              </div>
+            )}
 
             {results.length === 0 ? (
               <div style={{ padding: '48px', textAlign: 'center', fontFamily: F.mono, color: C.muted, fontSize: '13px' }}>
                 No results yet — check back after signals are resolved.
               </div>
             ) : (
-              results.map((r, i) => (
-                <div key={i} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 80px 80px 80px 80px 80px',
-                  padding: '12px 24px',
-                  borderBottom: i < results.length - 1 ? `1px solid ${C.border}` : 'none',
-                  background: r.result === 'hit'
-                    ? 'rgba(47,212,232,0.03)'
-                    : r.result === 'miss' ? 'rgba(232,163,61,0.03)' : 'transparent',
-                  alignItems: 'center',
-                }}>
-                  <div>
-                    <div style={{ fontFamily: F.sans, fontWeight: 500, fontSize: '14px', color: C.platinum }}>
-                      {r.player_name}
-                    </div>
-                    <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, marginTop: '2px' }}>
-                      {r.team} · {r.game_date}
-                    </div>
-                  </div>
-                  <div style={{ fontFamily: F.mono, color: C.muted, fontSize: '12px', letterSpacing: '0.06em' }}>
-                    {statLabel(r.stat_type ?? '')}
-                  </div>
-                  <div style={{ fontFamily: F.mono, fontWeight: 500, color: C.platinum, fontSize: '14px' }}>
-                    {r.line}
-                  </div>
-                  <div style={{
-                    fontFamily: F.mono, fontWeight: 500, fontSize: '12px', letterSpacing: '0.06em',
-                    color: r.direction === 'over' ? C.signalCyan : C.platinum,
-                  }}>
-                    {r.direction?.toUpperCase()}
-                  </div>
-                  <div style={{ fontFamily: F.mono, color: C.muted, fontSize: '12px' }}>
-                    {r.our_projection}
-                  </div>
-                  <div style={{
-                    fontFamily: F.mono, fontWeight: 500, fontSize: '12px', letterSpacing: '0.06em',
-                    color: r.result === 'hit' ? C.signalCyan
-                      : r.result === 'miss' ? C.flagAmber : C.muted,
-                  }}>
-                    {r.result === 'hit'     ? '✓ HIT'
-                      : r.result === 'miss' ? '✗ MISS'
-                      : r.result === 'pending' ? '–'
-                      : r.result?.toUpperCase()}
-                  </div>
-                </div>
-              ))
+              <ResolutionLog rows={results as ResultRow[]} sport={sport} />
             )}
           </div>
 

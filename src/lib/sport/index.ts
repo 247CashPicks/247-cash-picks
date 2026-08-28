@@ -83,6 +83,16 @@ export interface SportConfig {
   hasMinutes: boolean
   /** Tools with no analogue in this sport, hidden from the nav. */
   hiddenTools: readonly string[]
+  /**
+   * How the operator dashboard scopes its slate.
+   *
+   * NBA plays daily, so the board is a single day (today) — 0. NFL plays weekly
+   * across Thu–Mon, so a `game_date = today` filter shows an empty board five
+   * days in six while a full week sits staged; the board is instead the
+   * upcoming window [today, today + N]. ~28 days keeps it to roughly the next
+   * few weeks that actually have data rather than the whole season.
+   */
+  slateWindowDays: number
 }
 
 export const SPORT_CONFIG: Record<Sport, SportConfig> = {
@@ -94,6 +104,7 @@ export const SPORT_CONFIG: Record<Sport, SportConfig> = {
     playerRankColumn: 'per36_pts',
     hasMinutes: true,
     hiddenTools: [],
+    slateWindowDays: 0,
   },
   NFL: {
     label: 'NFL',
@@ -112,6 +123,7 @@ export const SPORT_CONFIG: Record<Sport, SportConfig> = {
     // not fail — it would return a confident, meaningless number, which is
     // worse. Hidden rather than ported.
     hiddenTools: ['lineup_adjuster', 'matchup_builder', 'projection_runner'],
+    slateWindowDays: 28,
   },
 }
 
