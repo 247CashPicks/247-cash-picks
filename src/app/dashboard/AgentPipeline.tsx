@@ -147,7 +147,7 @@ export default function AgentPipeline(
                   cursor: busy || blocked ? 'not-allowed' : 'pointer',
                 }}
               >
-                {busy ? 'RUNNING…' : 'RUN'}
+                {busy ? 'RUNNING…' : agent.runLabel ?? 'RUN'}
               </button>
               {st?.message && (
                 <div style={{

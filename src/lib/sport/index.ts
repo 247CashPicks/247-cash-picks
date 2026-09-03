@@ -36,7 +36,7 @@ export const DEFAULT_SPORT: Sport = 'NBA'
 /** Cookie name. Read by server components, written by the nav switcher. */
 export const SPORT_COOKIE = 'tac_sport'
 
-/** Shared picks_* tables carrying a league column (backend sql/008 + 009). */
+/** Shared data tables carrying a league column (including sql/014 briefings). */
 export const LEAGUE_SCOPED_TABLES = [
   'picks_games',
   'picks_players',
@@ -47,6 +47,7 @@ export const LEAGUE_SCOPED_TABLES = [
   'picks_published',
   'picks_projection_accuracy_runs',
   'picks_player_overrides',
+  'briefings',
 ] as const
 
 export function isSport(value: unknown): value is Sport {

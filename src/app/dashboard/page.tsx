@@ -10,6 +10,8 @@ import { AGENTS_BY_SPORT } from '@/lib/picks/agents'
 import AgentPipeline from './AgentPipeline'
 import ProjectionsPanel, { type ProjRow } from './ProjectionsPanel'
 import SignalQueuePanel, { type Selection } from './SignalQueuePanel'
+import BriefingsPanel from './BriefingsPanel'
+import { editionLabel, formatBriefingRange, type Briefing } from '@/lib/briefings'
 
 export const dynamic = 'force-dynamic'
 
@@ -97,7 +99,7 @@ async function getDashboardData(sport: Sport) {
     ? lineQ.gte('game_date', today).lte('game_date', upper)
     : lineQ.eq('game_date', today)
 
-  const [projectionsRes, selectionsRes, linesRes, gamesRes] = await Promise.all([
+  const [projectionsRes, selectionsRes, linesRes, gamesRes, briefingsRes, latestBriefingRes] = await Promise.all([
     projQ.order('game_date', { ascending: true }).order('confidence_score', { ascending: false }),
     selQ.order('game_date', { ascending: true }).order('display_order', { ascending: true }),
     lineQ.order('edge_pct', { ascending: false }),
@@ -106,6 +108,14 @@ async function getDashboardData(sport: Sport) {
           .eq('brand_id', BRAND.slug).eq('league', sport)
           .gte('game_date', today).lte('game_date', upper)
       : Promise.resolve({ data: [] as { game_date: string; week: number | null }[] }),
+    supabase.from('briefings')
+      .select('id, brand_id, league, edition_type, slug, title, subtitle, body_md, summary, published_at, status, game_date_start, game_date_end, generated_at, edited_at')
+      .eq('brand_id', BRAND.slug).eq('league', sport)
+      .order('generated_at', { ascending: false }).limit(100),
+    supabase.from('briefings')
+      .select('id, brand_id, league, edition_type, slug, title, subtitle, body_md, summary, published_at, status, game_date_start, game_date_end, generated_at, edited_at')
+      .eq('brand_id', BRAND.slug).eq('league', sport).eq('status', 'published')
+      .order('published_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const projections = projectionsRes.data || []
@@ -113,6 +123,8 @@ async function getDashboardData(sport: Sport) {
     projections,
     selections: selectionsRes.data || [],
     lines:      linesRes.data      || [],
+    briefings:  (briefingsRes.data || []) as Briefing[],
+    latestBriefing: (latestBriefingRes.data || null) as Briefing | null,
     slate:      describeSlate(windowDays, projections, gamesRes.data || []),
   }
 }
@@ -126,7 +138,7 @@ export default async function DashboardPage() {
   if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
 
   const sport = await getSport()
-  const { projections, selections, lines, slate } = await getDashboardData(sport)
+  const { projections, selections, lines, slate, briefings, latestBriefing } = await getDashboardData(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
@@ -227,6 +239,19 @@ export default async function DashboardPage() {
 
           <AgentPipeline agents={AGENTS_BY_SPORT[sport]} sport={sport} />
 
+          {latestBriefing && (
+            <a href={`/insights/${latestBriefing.slug}`} style={{ display: 'block', background: C.panel, border: `1px solid ${C.borderEmphasis}`, color: 'inherit', marginBottom: '24px', padding: '16px 20px', textDecoration: 'none' }}>
+              <div style={{ alignItems: 'center', display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ color: C.signalCyan, fontFamily: F.mono, fontSize: '10px', letterSpacing: '0.12em', marginBottom: '6px' }}>// LATEST BRIEFING · {editionLabel(latestBriefing.edition_type)}</div>
+                  <div style={{ color: C.platinum, fontFamily: F.sans, fontSize: '17px', fontWeight: 500 }}>{latestBriefing.title}</div>
+                  <div style={{ color: C.dim, fontFamily: F.mono, fontSize: '10px', marginTop: '5px' }}>{formatBriefingRange(latestBriefing.game_date_start, latestBriefing.game_date_end)}</div>
+                </div>
+                <span style={{ color: C.signalCyan, fontFamily: F.mono, fontSize: '11px', letterSpacing: '0.08em' }}>READ INSIGHT →</span>
+              </div>
+            </a>
+          )}
+
           <div className="dashboard-layout">
 
             {/* Projections table */}
@@ -290,6 +315,7 @@ export default async function DashboardPage() {
               )}
             </div>
           </div>
+          <BriefingsPanel rows={briefings} sport={sport} />
         </div>
       </div>
     </div>

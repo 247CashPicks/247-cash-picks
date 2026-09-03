@@ -52,8 +52,9 @@ export async function POST(req: NextRequest) {
   }
 
   const params = new URLSearchParams()
-  if (date) params.set('date', date)
+  if (date) params.set(def.dateParam ?? 'date', date)
   if (def.leagueParam) params.set('league', sport)
+  if (def.editionType) params.set('edition_type', def.editionType)
   const qs = params.toString()
   const url = `${BACKEND_URL}/agents/${def.backendPath}/run${qs ? `?${qs}` : ''}`
   const started = Date.now()

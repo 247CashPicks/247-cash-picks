@@ -37,6 +37,12 @@ export interface AgentDef {
   /** Append `?league=<sport>`. Only the shared agents under NFL need it; the
    *  NBA dispatch stays param-free, which is what the NBA backend expects. */
   leagueParam: boolean
+  /** Briefing writer needs its cadence in the backend payload, not just a date. */
+  editionType?: 'daily' | 'weekly' | 'alert'
+  /** Backend parameter name for an optional requested slate date. */
+  dateParam?: 'date' | 'game_date'
+  /** Lets the briefing card communicate its operator action without a one-off UI. */
+  runLabel?: string
 }
 
 export const AGENTS_BY_SPORT: Record<Sport, readonly AgentDef[]> = {
@@ -48,6 +54,7 @@ export const AGENTS_BY_SPORT: Record<Sport, readonly AgentDef[]> = {
     { key: 'projector', label: 'Projector', glyph: '◆', time: '10:00 AM ET', liveOnly: false, backendPath: 'picks-projector', leagueParam: false },
     { key: 'lines',     label: 'Lines',     glyph: '↗', time: '2:00 PM ET',  liveOnly: true,  backendPath: 'picks-lines',     leagueParam: false },
     { key: 'selector',  label: 'Selector',  glyph: '›', time: '2:30 PM ET',  liveOnly: false, backendPath: 'picks-selector',  leagueParam: false },
+    { key: 'briefing-writer', label: 'Briefing Writer', glyph: '▤', time: 'Daily · after selector', liveOnly: false, backendPath: 'briefing-writer', leagueParam: true, editionType: 'daily', dateParam: 'game_date', runLabel: 'GENERATE EDITION' },
   ],
   NFL: [
     { key: 'nfl-reference-seeder', label: 'Reference Seeder', glyph: '◇', time: 'Tue · weekly', liveOnly: false, backendPath: 'nfl-reference-seeder', leagueParam: false },
@@ -55,6 +62,7 @@ export const AGENTS_BY_SPORT: Record<Sport, readonly AgentDef[]> = {
     { key: 'nfl-projector',        label: 'Projector',        glyph: '◆', time: 'Wed · weekly', liveOnly: false, backendPath: 'nfl-projector',        leagueParam: false },
     { key: 'lines',                label: 'Lines',            glyph: '↗', time: 'Thu · weekly', liveOnly: true,  backendPath: 'picks-lines',          leagueParam: true },
     { key: 'selector',             label: 'Selector',         glyph: '›', time: 'Thu · weekly', liveOnly: false, backendPath: 'picks-selector',       leagueParam: true },
+    { key: 'briefing-writer',      label: 'Briefing Writer',  glyph: '▤', time: 'Weekly · after selector', liveOnly: false, backendPath: 'briefing-writer', leagueParam: true, editionType: 'weekly', dateParam: 'game_date', runLabel: 'GENERATE EDITION' },
   ],
 }
 

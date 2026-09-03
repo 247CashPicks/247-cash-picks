@@ -8,6 +8,7 @@
  */
 export const NAV_LINKS: readonly (readonly [label: string, href: string])[] = [
   ['SIGNALS', '/picks'],
+  ['INSIGHTS', '/insights'],
   ['ENGINE', '/tools'],
   ['PIPELINE', '/dashboard'],
   ['TIERS', '/join'],
