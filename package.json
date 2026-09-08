@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "build": "node scripts/check-copy.mjs && next build",
+    "start": "next start",
+    "check:copy": "node scripts/check-copy.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.3",

@@ -116,10 +116,10 @@ export default async function TrackerPage() {
           {/* Overall stats */}
           <div className="stats-4-grid" style={{ marginBottom: '36px' }}>
             {[
-              { label: 'RESOLUTION ACCURACY', value: `${winRate}%`,                         color: rateColor(winRate) },
+              { label: `PROJECTION ACCURACY (n=${resolved.length})`, value: `${winRate}%`,                         color: rateColor(winRate) },
               { label: 'TOTAL RESOLVED',       value: resolved.length.toString(),            color: C.platinum },
-              { label: 'HITS',                 value: hits.toString(),                       color: C.signalCyan },
-              { label: 'MISSES',               value: (resolved.length - hits).toString(),   color: C.flagAmber },
+              { label: 'CORRECT',              value: hits.toString(),                       color: C.signalCyan },
+              { label: 'MISSED',               value: (resolved.length - hits).toString(),   color: C.flagAmber },
             ].map(s => (
               <div key={s.label} style={{
                 background: C.panel, border: `1px solid ${C.border}`, padding: '24px', textAlign: 'center',
@@ -137,7 +137,7 @@ export default async function TrackerPage() {
           {/* By confidence */}
           <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: '24px', marginBottom: '28px' }}>
             <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '16px' }}>
-              // WIN RATE BY CONFIDENCE BAND
+              // PROJECTION ACCURACY BY CONFIDENCE BAND
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               {[

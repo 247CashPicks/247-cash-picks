@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
       confidence: proj.confidence_score >= 80 ? 'high'
         : proj.confidence_score >= 60 ? 'medium' : 'low',
       tier_required: 'core',
-      platform: line.platform || 'prizepicks',
+      platform: line.platform || 'market',
       status: 'pending',
       display_order: 0,
     })

@@ -37,7 +37,7 @@ export default function PickCard({ pick, locked }: { pick: PickPublished; locked
             {pick.player_name}
           </div>
           <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, marginTop: '3px', letterSpacing: '0.05em' }}>
-            {pick.team} · {pick.platform}
+            {pick.team}
           </div>
         </div>
         <div style={{
@@ -81,7 +81,7 @@ export default function PickCard({ pick, locked }: { pick: PickPublished; locked
           border: `1px solid ${resultColor}`,
         }}>
           <span style={{ fontFamily: F.mono, color: resultColor, fontWeight: 500, fontSize: '13px', letterSpacing: '0.08em' }}>
-            {pick.result === 'hit' ? '✓ HIT' : pick.result === 'miss' ? '✗ MISS' : pick.result.toUpperCase()}
+            {pick.result === 'hit' ? '✓ CORRECT' : pick.result === 'miss' ? '✗ MISSED' : pick.result.toUpperCase()}
           </span>
           {pick.actual_value && (
             <span style={{ fontFamily: F.mono, color: C.dim, fontSize: '12px' }}>

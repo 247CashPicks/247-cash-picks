@@ -25,7 +25,7 @@ const instruments = [
   },
   {
     id: '03', name: 'LINEUP CALIBRATOR', tier: 'vector+',
-    desc: 'Apply shared-floor adjustments for star combinations with fewer than 20 games of co-play data. Conservative bias applied automatically; override with your conviction.',
+    desc: 'Apply shared-floor adjustments for star combinations with fewer than 20 games of co-play data. Conservative bias applied automatically; override with your own estimate.',
   },
   {
     id: '04', name: 'BACKTESTER', tier: 'nexus',
@@ -33,7 +33,7 @@ const instruments = [
   },
   {
     id: '05', name: 'DAILY SIGNALS', tier: 'core+',
-    desc: 'Operator-reviewed model outputs published before each game slate. High-edge projections confirmed against live lines. Delivered to your dashboard before market movement.',
+    desc: 'Operator-reviewed model outputs published before each game slate. The projections with the largest gap to the published market number, confirmed and dated. Delivered to your dashboard ahead of the slate.',
   },
 ]
 
@@ -226,7 +226,7 @@ export default function LandingPage() {
               fontWeight: 500, lineHeight: 1.0, letterSpacing: '-0.03em',
               margin: '0 0 40px', color: C.signalCyan,
             }}>
-              Beat the line.
+              See the gap.
             </h1>
 
             {/* Subcopy */}

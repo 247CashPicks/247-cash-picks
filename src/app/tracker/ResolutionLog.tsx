@@ -110,8 +110,8 @@ export default function ResolutionLog(
             color: r.result === 'hit' ? C.signalCyan
               : r.result === 'miss' ? C.flagAmber : C.muted,
           }}>
-            {r.result === 'hit'     ? '✓ HIT'
-              : r.result === 'miss' ? '✗ MISS'
+            {r.result === 'hit'     ? '✓ CORRECT'
+              : r.result === 'miss' ? '✗ MISSED'
               : r.result === 'pending' ? '–'
               : r.result?.toUpperCase()}
           </div>

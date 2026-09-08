@@ -105,17 +105,17 @@ export default function BacktesterPage() {
     setExporting(true)
     const csv = [
       'Metric,Value',
-      `Total Picks,${result.totalPicks}`,
-      `Hit Rate,${result.hitRate}%`,
+      `Resolved Sample,${result.totalPicks}`,
+      `Projection Accuracy,${result.hitRate}%`,
       `Avg Edge,${result.avgEdge}%`,
       `Avg Projection Error,${result.avgProjectionError}`,
       '',
-      'Confidence,Hits,Total,Rate',
+      'Confidence,Correct,Total,Accuracy',
       ...Object.entries(result.byConfidence).map(([k, v]) =>
         `${k},${v.hits},${v.total},${v.rate}%`
       ),
       '',
-      'Stat,Hits,Total,Rate',
+      'Stat,Correct,Total,Accuracy',
       ...Object.entries(result.byStat).map(([k, v]) =>
         `${k},${v.hits},${v.total},${v.rate}%`
       ),
@@ -357,8 +357,8 @@ export default function BacktesterPage() {
                 gap: '12px', marginBottom: '20px',
               }}>
                 {[
-                  { label: 'HIT RATE',       value: `${result.hitRate}%`,           color: C.signalCyan },
-                  { label: 'TOTAL PICKS',    value: result.resolved.toString(),      color: C.platinum  },
+                  { label: 'PROJECTION ACCURACY', value: `${result.hitRate}%`,           color: C.signalCyan },
+                  { label: 'RESOLVED SAMPLE', value: result.resolved.toString(),      color: C.platinum  },
                   { label: 'AVG EDGE',       value: `+${result.avgEdge}%`,           color: C.signalCyan },
                   { label: 'AVG PROJ ERROR', value: `±${result.avgProjectionError}`, color: C.flagAmber  },
                 ].map(s => (

@@ -17,7 +17,7 @@ const FEATURE_LABELS: Record<string, string> = {
   lineup_adjuster:     'Lineup Calibrator',
   backtester:          'Historical Accuracy Index',
   early_access:        'Early access signals',
-  guarantee:           'Signal Guarantee',
+  guarantee:           'Published accuracy record',
   consulting:          'Personalized consulting',
   insider_group:       'Private insider group',
   raw_export:          'Raw data export',
@@ -165,7 +165,7 @@ export default function JoinPage() {
             color: C.muted, lineHeight: 1.6, maxWidth: '460px', margin: 0,
           }}>
             Not a pick subscription — access to the engine itself.
-            Monthly billing. Signal Guarantee on all tiers.
+            Monthly billing. Published accuracy record on all tiers.
           </p>
         </div>
 
@@ -425,7 +425,7 @@ export default function JoinPage() {
                   </div>
                 </div>
 
-                {/* Signal Guarantee */}
+                {/* Accuracy transparency */}
                 <div style={{
                   border: `1px solid ${C.border}`,
                   padding: '12px 14px',
@@ -435,13 +435,14 @@ export default function JoinPage() {
                     fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
                     color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '4px',
                   }}>
-                    // SIGNAL GUARANTEE
+                    // ACCURACY TRANSPARENCY
                   </div>
                   <div style={{
                     fontFamily: F.sans, fontSize: '12px', fontWeight: 400,
                     color: C.muted, lineHeight: 1.5,
                   }}>
-                    If your first signals don&apos;t hit, you receive a full credit. No conditions.
+                    Every published projection is scored against the final box score and shown
+                    in the public Accuracy Index — including the misses. Cancel any time.
                   </div>
                 </div>
 
@@ -495,45 +496,6 @@ export default function JoinPage() {
                   color: C.faint, letterSpacing: '0.06em',
                 }}>
                   Secure payment via Stripe · Cancel anytime
-                </div>
-              </div>
-
-              {/* Partner promo codes */}
-              <div style={{
-                background: C.panel,
-                border: `1px solid ${C.border}`,
-                padding: '20px 24px',
-              }}>
-                <div style={{
-                  fontFamily: F.mono, fontSize: '10px', fontWeight: 400,
-                  color: C.dim, letterSpacing: '0.14em', marginBottom: '14px',
-                }}>
-                  // PARTNER PROMO CODES
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  {[
-                    { platform: 'UNDERDOG',   code: BRAND.promos.underdogCode   },
-                    { platform: 'PRIZEPICKS', code: BRAND.promos.prizepicksCode },
-                  ].map(p => (
-                    <div key={p.platform} style={{
-                      border: `1px solid ${C.border}`,
-                      padding: '12px 10px',
-                      textAlign: 'center',
-                    }}>
-                      <div style={{
-                        fontFamily: F.mono, fontSize: '9px', fontWeight: 400,
-                        color: C.dim, letterSpacing: '0.12em', marginBottom: '6px',
-                      }}>
-                        {p.platform}
-                      </div>
-                      <div style={{
-                        fontFamily: F.mono, fontSize: '14px', fontWeight: 500,
-                        color: C.platinum, letterSpacing: '0.1em',
-                      }}>
-                        {p.code}
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>

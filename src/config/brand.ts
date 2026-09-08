@@ -1,7 +1,7 @@
 export const BRAND = {
   slug:         'datanexus',                        // DB KEY — never change, used in all Supabase queries
   name:         'The Analytics Community',
-  tagline:      'Run the model. Beat the line.',
+  tagline:      'Run the model. See the gap.',
   subTagline:   'Not a pick service — the engine itself.',
   domain:       'theanalyticscommunity.com',
   supportEmail: 'support@theanalyticscommunity.com',
@@ -46,7 +46,7 @@ export const BRAND = {
     {
       slug: 'free', label: 'Observer', priceMonthly: 0, stripePriceId: '',
       mostPopular: false, color: '#5A6672', gem: '○', badge: 'Observer',
-      description: 'Browse the platform and preview the signal feed in teaser mode. No signals or tools access.',
+      description: 'Browse the platform and preview the signal feed. No signals or tools access.',
       picksLimit: 0,
     },
     {
@@ -82,8 +82,6 @@ export const BRAND = {
   ],
 
   promos: {
-    underdogCode:      'XOTICPAPI',
-    prizepicksCode:    'PRZX81V5Z',
     newMemberDiscount: 50,
   },
 }

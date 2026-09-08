@@ -51,7 +51,7 @@ const TOOLS: {
       'Agent data pre-fills all fields automatically',
       'Override any input with your own research',
       'See Fpace, Fdef, and reb suppression factors',
-      'Compare projections to live PrizePicks lines',
+      'Compare projections to the published market line',
       'Save analyses to the lab for future reference',
     ],
   },
