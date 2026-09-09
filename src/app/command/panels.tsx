@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type {
-  AuditEntry, CompareResponse, Indicator, IndicatorConfig,
+  AgentHealthRow, AuditEntry, CompareResponse, Indicator, IndicatorConfig,
   IndicatorsResponse, OperatorMe, StagedSelection,
 } from '@/lib/operator/client'
 
@@ -644,45 +644,65 @@ function ChangedKeys({ indicators }: { indicators: IndicatorsResponse | null }) 
 // ── 5. Run health ───────────────────────────────────────────────────────────
 
 export function RunHealthPanel({ data }: { data: Record<string, unknown> }) {
-  const agents = (data.agents ?? data.rows ?? []) as Record<string, unknown>[]
+  // FIELD NAMES COME FROM agents/agent_health.run(), checked against the real
+  // response rather than guessed. The first version of this panel read
+  // last_run / status / triggered_by / error_summary and would have rendered
+  // three of its four columns as "—" against live data: the report actually
+  // returns last_attempt_at, last_attempt_status, last_attempt_triggered_by
+  // and last_error.
+  const agents = (data.agents ?? []) as AgentHealthRow[]
   if (!Array.isArray(agents) || agents.length === 0) {
     return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
                        color: 'var(--steel)' }}>No runs recorded.</p>
   }
-  const bad = agents.filter((a) => a.status === 'error' || a.stale)
-  const ok = agents.filter((a) => !(a.status === 'error' || a.stale))
+  // needs_attention is the report's own verdict — stale OR the latest attempt
+  // failed. Re-deriving it here would be a second implementation to disagree.
+  const attention = agents.filter((a) => a.needs_attention)
+  const healthy = agents.filter((a) => !a.needs_attention)
+
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-      <thead><tr>
-        {['Agent', 'Last run', 'Trigger', 'Status'].map((h) => (
-          <th key={h} style={th}>{h}</th>))}
-      </tr></thead>
-      <tbody>
-        {[...bad, ...ok].map((a, idx) => {
-          const failing = a.status === 'error' || a.stale
-          return (
-            <tr key={idx}>
-              <td style={{ ...td, ...mono, fontSize: '12px' }}>
-                {String(a.agent_name ?? a.agent ?? '—')}</td>
-              <td style={{ ...td, ...mono, fontSize: '11px', textAlign: 'left',
-                           color: 'var(--steel)' }}>
-                {String(a.last_run ?? a.finished_at ?? a.started_at ?? '—').slice(0, 16).replace('T', ' ')}</td>
-              <td style={{ ...td, ...mono, fontSize: '11px' }}>
-                {String(a.triggered_by ?? '—')}</td>
+    <>
+      <p style={{ padding: '8px var(--pad)', margin: 0, ...mono,
+                  fontSize: '11px', color: attention.length
+                    ? 'var(--amber)' : 'var(--lime)' }}>
+        {attention.length} of {agents.length} need attention
+      </p>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead><tr>
+          {['Agent', 'Lg', 'Last attempt', 'Trigger', 'Status'].map((h) => (
+            <th key={h} style={th}>{h}</th>))}
+        </tr></thead>
+        <tbody>
+          {[...attention, ...healthy].map((a, idx) => (
+            <tr key={`${a.agent_name}-${a.league}-${idx}`}>
+              <td style={{ ...td, ...mono, fontSize: '12px' }}>{a.agent_name}</td>
               <td style={{ ...td, ...mono, fontSize: '11px',
-                           color: failing ? 'var(--alert)' : 'var(--lime)' }}>
-                {a.stale ? 'STALE' : String(a.status ?? '—').toUpperCase()}
-                {failing && a.error_summary ? (
-                  <div style={{ color: 'var(--alert)', fontSize: '11px' }}>
-                    {String(a.error_summary)}
+                           color: 'var(--steel)' }}>{a.league}</td>
+              <td style={{ ...td, ...mono, fontSize: '11px',
+                           color: 'var(--steel)' }}>
+                {a.last_attempt_at
+                  ? a.last_attempt_at.slice(0, 16).replace('T', ' ') : '—'}</td>
+              <td style={{ ...td, ...mono, fontSize: '11px' }}>
+                {a.last_attempt_triggered_by ?? '—'}</td>
+              <td style={{ ...td, ...mono, fontSize: '11px',
+                           color: a.needs_attention
+                             ? 'var(--alert)' : 'var(--lime)' }}>
+                {a.stale ? 'STALE'
+                  : (a.last_attempt_status ?? '—').toUpperCase()}
+                {/* Errors expanded by default — an error you have to click to
+                    see is an error nobody reads. */}
+                {a.needs_attention && a.last_error ? (
+                  <div style={{ color: 'var(--alert)', fontSize: '11px',
+                                whiteSpace: 'normal' }}>
+                    {a.last_error}
                   </div>
                 ) : null}
               </td>
             </tr>
-          )
-        })}
-      </tbody>
-    </table>
+          ))}
+        </tbody>
+      </table>
+    </>
   )
 }
 

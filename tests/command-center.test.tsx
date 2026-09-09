@@ -4,7 +4,8 @@ import type {
   CompareResponse, Indicator, IndicatorConfig, IndicatorsResponse, OperatorMe,
 } from '@/lib/operator/client'
 import {
-  ComparePanel, IndicatorsPanel, Panel, PromotePanel, VerdictChip,
+  ComparePanel, IndicatorsPanel, Panel, PromotePanel, RunHealthPanel,
+  VerdictChip,
   contradictsVerdict,
 } from '@/app/command/panels'
 
@@ -258,5 +259,77 @@ describe('panels render their own errors', () => {
   it('does not claim to be loading when it failed', () => {
     render(<Panel title="Indicators" error="Backend unreachable" />)
     expect(screen.queryByText('Loading…')).toBeNull()
+  })
+})
+
+describe('run health panel reads the real report shape', () => {
+  /**
+   * Fixture copied from a live agents/agent_health.run() response, not from
+   * the panel that renders it. The first version of this panel read
+   * last_run / status / triggered_by / error_summary; the report actually
+   * returns last_attempt_at / last_attempt_status / last_attempt_triggered_by
+   * / last_error. Against live data three of four columns rendered "—" and the
+   * panel looked like it worked.
+   */
+  const REAL_SHAPE = {
+    status: 'attention',
+    checked_at: '2026-09-09T19:01:43.243649+00:00',
+    agents_checked: 21,
+    agents_needing_attention: 1,
+    agents: [
+      {
+        agent_name: 'picks-selector', league: 'NBA', expected_now: true,
+        stale: true, latest_failed: false, needs_attention: true,
+        last_attempt_at: '2026-09-09T18:30:00+00:00',
+        last_attempt_status: 'skipped',
+        last_attempt_triggered_by: 'pipeline',
+        last_successful_at: null, healthy_age_hours: null,
+        last_error: 'no slate for today',
+      },
+      {
+        agent_name: 'picks-publisher', league: 'NBA', expected_now: true,
+        stale: false, latest_failed: false, needs_attention: false,
+        last_attempt_at: '2026-09-09T17:59:00+00:00',
+        last_attempt_status: 'success',
+        last_attempt_triggered_by: 'route',
+        last_successful_at: '2026-09-09T17:59:00+00:00',
+        healthy_age_hours: 1.0, last_error: null,
+      },
+    ],
+  }
+
+  it('renders the timestamp, trigger and status from the real field names', () => {
+    render(<RunHealthPanel data={REAL_SHAPE} />)
+    expect(screen.getByText('2026-09-09 18:30')).toBeTruthy()
+    expect(screen.getByText('pipeline')).toBeTruthy()
+    expect(screen.getByText('route')).toBeTruthy()
+    expect(screen.getByText('SUCCESS')).toBeTruthy()
+  })
+
+  it('surfaces stale ahead of the raw status', () => {
+    render(<RunHealthPanel data={REAL_SHAPE} />)
+    expect(screen.getByText('STALE')).toBeTruthy()
+  })
+
+  it('expands the error rather than hiding it behind a click', () => {
+    render(<RunHealthPanel data={REAL_SHAPE} />)
+    expect(screen.getByText('no slate for today')).toBeTruthy()
+  })
+
+  it('uses the report\'s own needs_attention verdict', () => {
+    render(<RunHealthPanel data={REAL_SHAPE} />)
+    expect(screen.getByText('1 of 2 need attention')).toBeTruthy()
+  })
+
+  it('never renders a dash where the report supplied a value', () => {
+    const { container } = render(<RunHealthPanel data={REAL_SHAPE} />)
+    const cells = [...container.querySelectorAll('td')].map((c) => c.textContent)
+    // Two fully-populated rows: nothing should be missing.
+    expect(cells.filter((c) => c === '—')).toHaveLength(0)
+  })
+
+  it('says so honestly when the report has no agents', () => {
+    render(<RunHealthPanel data={{ agents: [] }} />)
+    expect(screen.getByText('No runs recorded.')).toBeTruthy()
   })
 })

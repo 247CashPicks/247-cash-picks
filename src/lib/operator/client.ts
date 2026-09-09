@@ -200,6 +200,23 @@ export interface AuditEntry {
   note: string | null
 }
 
+/** One row of agents/agent_health.run()'s `agents` array. Field names verified
+ *  against the live report, not inferred from the panel that renders them. */
+export interface AgentHealthRow {
+  agent_name: string
+  league: string
+  expected_now: boolean
+  stale: boolean
+  latest_failed: boolean
+  needs_attention: boolean
+  last_attempt_at: string | null
+  last_attempt_status: string | null
+  last_attempt_triggered_by: string | null
+  last_successful_at: string | null
+  healthy_age_hours: number | null
+  last_error: string | null
+}
+
 export interface StagedSelection {
   id: string
   player_name: string
