@@ -146,6 +146,23 @@ export function IndicatorsPanel({ data, editing, onChanged }: {
           ? <>Editing <strong style={mono}>{editing.name}</strong> — changes save immediately.</>
           : <>Showing the live configuration. Select a preview to edit.</>}
       </p>
+      {/*
+        The controls write to `editing`; the values below come from
+        `data.config_id`. When those disagree, every edit writes to one config
+        and re-renders the other's numbers — an operator toggling a switch that
+        visibly does nothing while the database records the change. That is not
+        hypothetical: it is what this panel did until 2026-09-09, silently.
+      */}
+      {editing && data.config_id !== editing.id && (
+        <p role="alert" style={{ margin: '0 8px 8px', padding: '8px',
+                                 border: '1px solid var(--alert)',
+                                 fontSize: '12px', color: 'var(--alert)' }}>
+          These values are from <strong>{data.config_name ?? data.config_id}</strong>
+          {' '}({data.config_status}), but the controls edit{' '}
+          <strong>{editing.name}</strong>. Edits would not be visible here.
+          Reload the page before changing anything.
+        </p>
+      )}
       {grouped.map(({ category, rows }) => (
         <div key={category}>
           <div style={{ ...mono, fontSize: '10px', letterSpacing: '0.12em',

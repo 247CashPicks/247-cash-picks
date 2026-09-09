@@ -29,7 +29,7 @@ const LEAGUES = ['NFL', 'NBA'] as const
 export default async function CommandPage({
   searchParams,
 }: {
-  searchParams: Promise<{ league?: string }>
+  searchParams: Promise<{ league?: string; config?: string }>
 }) {
   const me = await requireOperatorPage()
 
@@ -38,8 +38,23 @@ export default async function CommandPage({
     ? (params.league as string)
     : 'NFL'
 
+  /**
+   * The config being edited lives in the URL, not in client state.
+   *
+   * It has to, because the VALUES come from this server fetch. When selection
+   * was client-only, the indicators were always fetched for the live config:
+   * selecting a preview enabled the controls and PATCHed the preview
+   * correctly, then `router.refresh()` re-read live values and every edit
+   * re-rendered identical. Putting it here means the refresh after a PATCH
+   * re-reads the config that was just written, so an edit is visible.
+   */
+  const selectedConfigId = params.config ?? null
+  const indicatorsPath = `/operator/indicators?league=${league}&limit=200`
+    + (selectedConfigId
+       ? `&config_id=${encodeURIComponent(selectedConfigId)}` : '')
+
   const [indicators, configs, audit, slate, health] = await Promise.all([
-    operatorFetch<IndicatorsResponse>(`/operator/indicators?league=${league}&limit=200`),
+    operatorFetch<IndicatorsResponse>(indicatorsPath),
     operatorFetch<{ configs: IndicatorConfig[] }>(`/operator/indicator-configs?league=${league}`),
     operatorFetch<{ entries: AuditEntry[] }>(`/operator/indicator-audit?league=${league}&limit=100`),
     operatorFetch<StagedSlateResponse>(`/operator/staged-slate?league=${league}`),
@@ -51,6 +66,7 @@ export default async function CommandPage({
       me={me}
       league={league}
       leagues={[...LEAGUES]}
+      selectedConfigId={selectedConfigId}
       indicators={indicators}
       configs={configs}
       audit={audit}

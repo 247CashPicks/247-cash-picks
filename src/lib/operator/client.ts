@@ -136,8 +136,14 @@ export interface Indicator {
 
 export interface IndicatorsResponse {
   league: string
+  /** WHICH configuration these values came from. The panel asserts this
+   *  against the config it believes it is editing — controls bound to a
+   *  preview while the values came from live is the exact defect that made
+   *  every edit look like it did nothing. */
   config_id: string | null
   config_source: string
+  config_name: string | null
+  config_status: 'live' | 'preview'
   total: number
   limit: number
   offset: number

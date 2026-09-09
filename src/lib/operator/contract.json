@@ -73,7 +73,9 @@
     ],
     "IndicatorsResponse": [
       "config_id",
+      "config_name",
       "config_source",
+      "config_status",
       "constraints",
       "indicators",
       "league",

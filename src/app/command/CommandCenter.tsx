@@ -23,11 +23,17 @@ import {
 export interface PanelData<T> extends OperatorResult<T> {}
 
 export default function CommandCenter({
-  me, league, leagues, indicators, configs, audit, slate, health,
+  me, league, leagues, selectedConfigId,
+  indicators, configs, audit, slate, health,
 }: {
   me: OperatorMe
   league: string
   leagues: string[]
+  /** From the URL. The indicator VALUES are fetched server-side for this
+   *  config, so the selection cannot live in client state without the two
+   *  drifting apart — which is exactly how every edit came to look like it
+   *  did nothing. */
+  selectedConfigId: string | null
   indicators: PanelData<IndicatorsResponse>
   configs: PanelData<{ configs: IndicatorConfig[] }>
   audit: PanelData<{ entries: AuditEntry[] }>
@@ -35,7 +41,17 @@ export default function CommandCenter({
   health: PanelData<Record<string, unknown>>
 }) {
   const router = useRouter()
-  const [selectedConfig, setSelectedConfig] = useState<IndicatorConfig | null>(null)
+
+  // Derived from the URL, never stored: one source of truth for "which config
+  // am I editing", shared by the server fetch and every panel.
+  const selectedConfig = selectedConfigId
+    ? (configs.data?.configs.find((c) => c.id === selectedConfigId) ?? null)
+    : null
+
+  const setSelectedConfig = useCallback((c: IndicatorConfig | null) => {
+    router.push(c ? `/command?league=${league}&config=${c.id}`
+                  : `/command?league=${league}`)
+  }, [router, league])
   const [compare, setCompare] = useState<CompareResponse | null>(null)
   const [compareError, setCompareError] = useState<string | null>(null)
   const [auditOpen, setAuditOpen] = useState(false)
@@ -74,9 +90,10 @@ export default function CommandCenter({
     (live.health.data?.nfl_schedule_context as NflScheduleContext | null) ?? null
 
   const switchLeague = (next: string) => {
-    setSelectedConfig(null)
     setCompare(null)
     setCompareError(null)
+    // No config param: one league's preview is a 404 for the other, and
+    // carrying it across would blank the Indicators panel with an error.
     router.push(`/command?league=${next}`)
   }
 
