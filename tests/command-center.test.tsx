@@ -5,9 +5,12 @@ import type {
 } from '@/lib/operator/client'
 import {
   ComparePanel, IndicatorsPanel, Panel, PromotePanel, RunHealthPanel,
-  VerdictChip,
-  contradictsVerdict,
+  SlatePanel, VerdictChip,
+  contradictsVerdict, slateEmptyMessage,
 } from '@/app/command/panels'
+import type {
+  NflScheduleContext, StagedSelection, StagedSlateResponse,
+} from '@/lib/operator/client'
 
 /**
  * Part B tests. The route guard is exercised through its own unit rather than a
@@ -158,6 +161,9 @@ describe('compare', () => {
   const compare: CompareResponse = {
     league: 'NFL', config_id: 'cfg-1',
     window: { start: '2026-09-13', end: '2026-09-13' },
+    requested_window: { start: '2026-09-13', end: '2026-09-13' },
+    dates_previewed: ['2026-09-13'],
+    covers_requested_window: true,
     rows: [{
       player_name: 'Big Move', team: 'BUF', game_date: '2026-09-13',
       stat: 'rec_yds', live_projection: 60, preview_projection: 90, delta: 30,
@@ -331,5 +337,166 @@ describe('run health panel reads the real report shape', () => {
   it('says so honestly when the report has no agents', () => {
     render(<RunHealthPanel data={{ agents: [] }} />)
     expect(screen.getByText('No runs recorded.')).toBeTruthy()
+  })
+})
+
+// ── Finding 2: a preview must cover the window it claims ────────────────────
+
+const SCHEDULE: NflScheduleContext = {
+  season: 2026, week: 1, reference_game_date: '2026-09-13',
+  target_date: '2026-09-09', source: 'nflverse schedules/games.csv',
+  game_type: 'REG',
+}
+
+const PREVIEW_CONFIG: IndicatorConfig = {
+  id: 'cfg-1', name: 'experiment', league: 'NFL', status: 'preview',
+  created_by: 'King OG', created_at: '2026-09-09T00:00:00', promoted_at: null,
+  promoted_by: null, parent_config_id: null, note: null,
+}
+
+const COMPARE: CompareResponse = {
+  league: 'NFL', config_id: 'cfg-1',
+  window: { start: '2026-09-09', end: '2026-09-14' },
+  requested_window: { start: '2026-09-09', end: '2026-09-14' },
+  dates_previewed: ['2026-09-09', '2026-09-14'],
+  covers_requested_window: true,
+  rows: [],
+  summary: {
+    rows_compared: 0, rows_changed: 0, mean_abs_delta_per_stat: {},
+    would_stage: { live: 0, preview: 0 }, would_stage_delta: 0,
+    staged_selections_affected: 0,
+  },
+  staged_selection_changes: [],
+}
+
+describe('preview window', () => {
+  const noop = () => {}
+
+  it('offers NFL a week, because the projector selects games by week', () => {
+    render(<ComparePanel league="NFL" config={PREVIEW_CONFIG} compare={null}
+      error={null} schedule={SCHEDULE} onCompare={noop} onError={noop} />)
+    expect((screen.getByLabelText('NFL week') as HTMLInputElement).value)
+      .toBe('1')
+    expect((screen.getByLabelText('NFL season') as HTMLInputElement).value)
+      .toBe('2026')
+  })
+
+  it('offers a date range for date-shaped leagues', () => {
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={null} error={null} schedule={null}
+      onCompare={noop} onError={noop} />)
+    expect(screen.queryByLabelText('NFL week')).toBeNull()
+    expect(screen.getByText(/FROM/)).toBeTruthy()
+  })
+
+  it('sends the week, not the first day of a range, for NFL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ status: 'success', dates_previewed: ['2026-09-13'],
+                           window: { start: '2026-09-13', end: '2026-09-14' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<ComparePanel league="NFL" config={PREVIEW_CONFIG} compare={null}
+      error={null} schedule={SCHEDULE} onCompare={noop} onError={noop} />)
+    fireEvent.click(screen.getByText('RUN PREVIEW'))
+    // Wait on the rendered result, not just the call: that lets the state
+    // update settle inside act() instead of after the test ends.
+    await screen.findByText(/PREVIEWED 2026-09-13/)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.week).toBe(1)
+    expect(body.season).toBe('2026')
+  })
+
+  it('warns when the preview covered less than was requested', () => {
+    /* The defect this whole change exists for: a one-day preview under a
+       six-day heading read as a week's verdict. */
+    const partial: CompareResponse = {
+      ...COMPARE,
+      window: { start: '2026-09-09', end: '2026-09-09' },
+      requested_window: { start: '2026-09-09', end: '2026-09-14' },
+      dates_previewed: ['2026-09-09'],
+      covers_requested_window: false,
+    }
+    render(<ComparePanel league="NFL" config={PREVIEW_CONFIG} compare={partial}
+      error={null} schedule={SCHEDULE} onCompare={noop} onError={noop} />)
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain('2026-09-09')
+    expect(alert.textContent).toContain('not the requested')
+    expect(alert.textContent).toContain('2026-09-14')
+  })
+
+  it('says nothing alarming when the preview covered the whole request', () => {
+    render(<ComparePanel league="NFL" config={PREVIEW_CONFIG} compare={COMPARE}
+      error={null} schedule={SCHEDULE} onCompare={noop} onError={noop} />)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
+
+// ── Finding 3: an empty slate explains itself ───────────────────────────────
+
+function sel(name: string, status: string): StagedSelection {
+  return {
+    id: `id-${name}`, player_name: name, team: 'BUF', stat_type: 'rec_yds',
+    line: 65.5, our_projection: 70, direction: 'over', edge_pct: 6.9,
+    confidence: 'high', tier_required: 'free', status, game_date: '2026-09-13',
+    platform: 'prizepicks', line_pulled: false,
+    provenance: { config_id: null, config_name: null, agent_run_id: null,
+                  agent_run_short: null, snapshot_hash_short: null },
+  }
+}
+
+function slate(over: Partial<StagedSlateResponse> = {}): StagedSlateResponse {
+  return {
+    league: 'NFL', limit: 50, offset: 0,
+    window: { start: '2026-09-13', end: '2026-09-14', source: 'upcoming' },
+    counts: {}, total: 0, pending: 0, selections: [], ...over,
+  }
+}
+
+describe('staged slate', () => {
+  it('shows every state, not only pending', () => {
+    render(<SlatePanel slate={slate({
+      selections: [sel('Pends', 'pending'), sel('Pubs', 'published')],
+      counts: { pending: 1, published: 1 }, total: 2, pending: 1,
+    })} />)
+    expect(screen.getByText('PENDING')).toBeTruthy()
+    expect(screen.getByText('PUBLISHED')).toBeTruthy()
+  })
+
+  it('puts pending first — it is the only actionable state', () => {
+    render(<SlatePanel slate={slate({
+      selections: [sel('Pends', 'pending'), sel('Pubs', 'published')],
+      counts: { pending: 1, published: 1 }, total: 2, pending: 1,
+    })} />)
+    const states = screen.getAllByText(/^(PENDING|PUBLISHED)$/)
+      .map((n) => n.textContent)
+    expect(states[0]).toBe('PENDING')
+  })
+
+  it('an empty window names what IS there, never a bare blank', () => {
+    /* Live NFL when this was written: 23 cancelled, 10 published, 0 pending. */
+    const message = slateEmptyMessage(slate({
+      counts: { published: 10, cancelled: 23 }, total: 33, pending: 0,
+    }))
+    expect(message).toContain('Nothing pending')
+    expect(message).toContain('10 published')
+    expect(message).toContain('23 cancelled')
+    expect(message).toContain('2026-09-13')
+  })
+
+  it('distinguishes an empty window from a league with no selections at all', () => {
+    /* Live NBA when this was written: zero selections, ever. */
+    const message = slateEmptyMessage(slate({
+      window: { start: null, end: null, source: 'no_selections' },
+      league: 'NBA',
+    }))
+    expect(message).toContain('No NBA selections on record at all')
+  })
+
+  it('never renders the bare string the old panel used', () => {
+    render(<SlatePanel slate={slate({
+      counts: { published: 10 }, total: 10, pending: 0,
+    })} />)
+    expect(screen.queryByText('Nothing staged.')).toBeNull()
   })
 })

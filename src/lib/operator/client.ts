@@ -164,7 +164,16 @@ export interface IndicatorConfig {
 export interface CompareResponse {
   league: string
   config_id: string
+  /** The window ACTUALLY previewed, derived from the preview rows themselves.
+   *  Not the window that was asked for: a preview covering one day of a
+   *  six-day request used to come back labelled with all six days, so the
+   *  operator read a one-day result as a week's verdict. */
   window: { start: string; end: string }
+  requested_window: { start: string; end: string }
+  dates_previewed: string[]
+  /** False when the preview covered less than was asked for. The panel says so
+   *  rather than letting a partial result read as a complete one. */
+  covers_requested_window: boolean
   rows: {
     player_name: string; team: string | null; game_date: string; stat: string
     live_projection: number | null; preview_projection: number | null
@@ -200,6 +209,20 @@ export interface AuditEntry {
   note: string | null
 }
 
+/** nfl_schedule_context, carried inside the run-health report.
+ *
+ *  The week an NFL preview should run is the scheduler's answer, resolved from
+ *  nflverse schedule dates. The browser must not derive a week from a date —
+ *  that is a second implementation waiting to disagree with the first. */
+export interface NflScheduleContext {
+  season: number
+  week: number
+  reference_game_date: string
+  target_date: string
+  source: string
+  game_type: string | null
+}
+
 /** One row of agents/agent_health.run()'s `agents` array. Field names verified
  *  against the live report, not inferred from the panel that renders them. */
 export interface AgentHealthRow {
@@ -215,6 +238,42 @@ export interface AgentHealthRow {
   last_successful_at: string | null
   healthy_age_hours: number | null
   last_error: string | null
+}
+
+/** What a preview run actually did, so the client never has to guess.
+ *
+ *  An NFL week resolves to its own dates inside the projector; a date range is
+ *  looped by the route. Either way the compare that follows uses `window` from
+ *  here rather than re-deriving it in the browser. */
+export interface PreviewRunResponse {
+  status: string
+  league: string
+  config_id: string
+  run_kind: string
+  actor: string
+  requested_window: { start: string | null; end: string | null }
+  window: { start: string; end: string } | null
+  dates_previewed: string[]
+  results: unknown[]
+}
+
+/** A window's selections in every state, with the counts that let an empty
+ *  panel explain itself instead of rendering a bare blank. */
+export interface StagedSlateResponse {
+  league: string
+  limit: number
+  offset: number
+  window: {
+    start: string | null
+    end: string | null
+    /** How the window was chosen: an explicit request, the league's upcoming
+     *  game dates, the most recent slate on file, or nothing at all. */
+    source: 'requested' | 'upcoming' | 'most_recent' | 'no_selections'
+  }
+  counts: Record<string, number>
+  total: number
+  pending: number
+  selections: StagedSelection[]
 }
 
 export interface StagedSelection {

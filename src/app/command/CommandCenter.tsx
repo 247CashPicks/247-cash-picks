@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type {
   AuditEntry, CompareResponse, Indicator, IndicatorConfig,
-  IndicatorsResponse, OperatorMe, OperatorResult, StagedSelection,
+  IndicatorsResponse, OperatorMe, OperatorResult,
+  NflScheduleContext, StagedSlateResponse,
 } from '@/lib/operator/client'
 import {
   AuditDrawer, ComparePanel, ConfigsPanel, IndicatorsPanel, PromotePanel,
@@ -30,7 +31,7 @@ export default function CommandCenter({
   indicators: PanelData<IndicatorsResponse>
   configs: PanelData<{ configs: IndicatorConfig[] }>
   audit: PanelData<{ entries: AuditEntry[] }>
-  slate: PanelData<{ selections: StagedSelection[] }>
+  slate: PanelData<StagedSlateResponse>
   health: PanelData<Record<string, unknown>>
 }) {
   const router = useRouter()
@@ -65,6 +66,12 @@ export default function CommandCenter({
   }, [league, slate, health])
 
   const refresh = useCallback(() => router.refresh(), [router])
+
+  // The NFL week to preview comes from the run-health report the page already
+  // holds, so the browser never derives a week from a date. Absent outside the
+  // NFL season, which is why ComparePanel treats it as optional.
+  const scheduleContext =
+    (live.health.data?.nfl_schedule_context as NflScheduleContext | null) ?? null
 
   const switchLeague = (next: string) => {
     setSelectedConfig(null)
@@ -111,6 +118,7 @@ export default function CommandCenter({
               config={selectedConfig}
               compare={compare}
               error={compareError}
+              schedule={scheduleContext}
               onCompare={setCompare}
               onError={setCompareError}
             />
@@ -133,9 +141,7 @@ export default function CommandCenter({
             {live.health.data && <RunHealthPanel data={live.health.data} />}
           </Panel>
           <Panel title="Staged slate" error={live.slate.error}>
-            {live.slate.data && (
-              <SlatePanel selections={live.slate.data.selections ?? []} />
-            )}
+            {live.slate.data && <SlatePanel slate={live.slate.data} />}
           </Panel>
         </div>
       </main>

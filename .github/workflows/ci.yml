@@ -1,0 +1,41 @@
+name: CI
+
+# `npm run build` runs the three guards in sequence — copy, contrast, and the
+# operator API contract — before next build. A field the backend does not send
+# fails here rather than rendering as an empty cell in the command center.
+#
+# No secrets: none of these checks talk to Clerk, Supabase or the backend.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Operator API contract matches the interfaces
+        run: npm run check:contract
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Build-time only. The page is force-dynamic and every operator call
+          # happens at request time, so no real key is needed to compile — and
+          # a live key must never sit in a CI environment.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2ktbm90LWEtcmVhbC1rZXkk
+          CLERK_SECRET_KEY: sk_test_ci-not-a-real-key
+          BACKEND_URL: http://backend.invalid

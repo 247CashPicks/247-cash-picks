@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type {
   AgentHealthRow, AuditEntry, CompareResponse, Indicator, IndicatorConfig,
   IndicatorsResponse, OperatorMe, StagedSelection,
+  StagedSlateResponse, PreviewRunResponse, NflScheduleContext,
 } from '@/lib/operator/client'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
@@ -359,17 +360,28 @@ export function ConfigsPanel({ league, configs, selected, onSelect, onChanged }:
 
 // ── 3. Preview → Compare ────────────────────────────────────────────────────
 
-export function ComparePanel({ league, config, compare, error, onCompare, onError }: {
+export function ComparePanel({ league, config, compare, error, schedule,
+                              onCompare, onError }: {
   league: string
   config: IndicatorConfig | null
   compare: CompareResponse | null
   error: string | null
+  /** nfl_schedule_context from the run-health report the page already holds.
+   *  The week to preview is the scheduler's answer, not something the browser
+   *  should derive from a date. */
+  schedule: NflScheduleContext | null
   onCompare: (c: CompareResponse | null) => void
   onError: (e: string | null) => void
 }) {
   const today = new Date().toISOString().slice(0, 10)
   const [start, setStart] = useState(today)
   const [end, setEnd] = useState(today)
+  // NFL is week-shaped: the projector selects a week's games by week number
+  // and resolves its own dates. Previewing it by date previewed one day of it.
+  const isNfl = league === 'NFL'
+  const [week, setWeek] = useState(schedule?.week != null ? String(schedule.week) : '')
+  const [season, setSeason] = useState(schedule?.season != null ? String(schedule.season) : '')
+  const [ran, setRan] = useState<PreviewRunResponse | null>(null)
   const [busy, setBusy] = useState<'run' | 'compare' | null>(null)
 
   if (!config) {
@@ -379,14 +391,37 @@ export function ComparePanel({ league, config, compare, error, onCompare, onErro
     </p>
   }
 
+  /** What the RUN asked for. NFL previews a week by number; everything else
+   *  previews a date range, which the route loops server-side rather than
+   *  taking the first day of. */
+  function runBody() {
+    if (isNfl && week.trim()) {
+      return { week: Number(week), season: season.trim() || null,
+               start_date: start, end_date: end }
+    }
+    return { start_date: start, end_date: end }
+  }
+
+  /** The window to COMPARE over.
+   *
+   *  After a run, this is the window the API reports it actually previewed —
+   *  a week's dates are the projector's answer, and re-deriving them in the
+   *  browser is how the two halves drift apart. Before a run, it is whatever
+   *  is in the date fields, so comparing an earlier preview still works. */
+  function compareWindow() {
+    if (ran?.window) return ran.window
+    return { start, end }
+  }
+
   async function call(kind: 'run' | 'compare') {
     setBusy(kind); onError(null)
+    const w = compareWindow()
     const url = kind === 'run'
       ? `/api/operator/indicator-configs/${config!.id}/preview-run`
-      : `/api/operator/indicator-configs/${config!.id}/compare?start_date=${start}&end_date=${end}`
+      : `/api/operator/indicator-configs/${config!.id}/compare?start_date=${w.start}&end_date=${w.end}`
     const res = await fetch(url, kind === 'run'
       ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start_date: start, end_date: end }) }
+          body: JSON.stringify(runBody()) }
       : { cache: 'no-store' })
     setBusy(null)
     const body = await res.json().catch(() => null)
@@ -397,7 +432,16 @@ export function ComparePanel({ league, config, compare, error, onCompare, onErro
               : body?.detail?.error ?? `Failed (${res.status})`)
       return
     }
-    if (kind === 'compare') onCompare(body as CompareResponse)
+    if (kind === 'compare') { onCompare(body as CompareResponse); return }
+
+    const run = body as PreviewRunResponse
+    setRan(run)
+    onCompare(null)
+    if (!run.dates_previewed?.length) {
+      onError('The preview ran but projected nothing — no games in that '
+              + 'window, or no player rows yet. Compare would have nothing '
+              + 'to read.')
+    }
   }
 
   return (
@@ -405,25 +449,84 @@ export function ComparePanel({ league, config, compare, error, onCompare, onErro
       <div className="dn-progress" style={{ marginBottom: '10px' }} />
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap',
                     alignItems: 'center', marginBottom: '10px' }}>
-        <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
-          FROM <input type="date" value={start} onChange={(e) => setStart(e.target.value)}
-            style={dateInput} />
-        </label>
-        <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
-          TO <input type="date" value={end} onChange={(e) => setEnd(e.target.value)}
-            style={dateInput} />
-        </label>
+        {isNfl ? (
+          <>
+            <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+              WEEK <input type="number" min="1" max="22" value={week}
+                aria-label="NFL week"
+                onChange={(e) => setWeek(e.target.value)}
+                style={{ ...dateInput, width: '68px' }} />
+            </label>
+            <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+              SEASON <input type="number" value={season}
+                aria-label="NFL season"
+                onChange={(e) => setSeason(e.target.value)}
+                style={{ ...dateInput, width: '86px' }} />
+            </label>
+          </>
+        ) : (
+          <>
+            <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+              FROM <input type="date" value={start} onChange={(e) => setStart(e.target.value)}
+                style={dateInput} />
+            </label>
+            <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+              TO <input type="date" value={end} onChange={(e) => setEnd(e.target.value)}
+                style={dateInput} />
+            </label>
+          </>
+        )}
         <button type="button" disabled={busy !== null} onClick={() => call('run')}
           style={btn}>{busy === 'run' ? 'RUNNING…' : 'RUN PREVIEW'}</button>
         <button type="button" disabled={busy !== null} onClick={() => call('compare')}
           style={btn}>{busy === 'compare' ? 'COMPARING…' : 'COMPARE'}</button>
       </div>
 
+      {isNfl && (
+        <p style={{ ...mono, fontSize: '10px', color: 'var(--steel)',
+                    margin: '0 0 8px' }}>
+          NFL previews a whole week. Leave WEEK empty to preview by date range
+          instead.
+        </p>
+      )}
+
+      {ran && (
+        <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
+                    color: ran.dates_previewed?.length ? 'var(--lime)'
+                                                       : 'var(--amber)' }}>
+          {ran.dates_previewed?.length
+            ? `PREVIEWED ${ran.dates_previewed.join(', ')}`
+            : 'PREVIEWED NOTHING'}
+        </p>
+      )}
+
       {error && <p role="alert" style={{ fontSize: '12px', color: 'var(--alert)' }}>
         {error}</p>}
 
       {compare && (
         <>
+          <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
+                      color: 'var(--steel)' }}>
+            WINDOW {compare.window.start}
+            {compare.window.end !== compare.window.start
+              && ` → ${compare.window.end}`}
+            {' '}({compare.dates_previewed.length}
+            {compare.dates_previewed.length === 1 ? ' date' : ' dates'})
+          </p>
+          {!compare.covers_requested_window && (
+            /* The partial-preview warning. Without it a one-day result under a
+               six-day heading reads as a week's verdict, which is how this
+               went unnoticed against live data in the first place. */
+            <p role="alert" style={{ border: '1px solid var(--amber)',
+                                     padding: '8px', margin: '0 0 10px',
+                                     fontSize: '12px', color: 'var(--amber)' }}>
+              This preview covers {compare.window.start}
+              {compare.window.end !== compare.window.start
+                && ` → ${compare.window.end}`}, not the requested{' '}
+              {compare.requested_window.start} → {compare.requested_window.end}.
+              Everything below is that shorter window only.
+            </p>
+          )}
           <dl style={{ display: 'grid', gap: '4px 16px', margin: '0 0 10px',
                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))',
                        fontSize: '12px' }}>
@@ -708,18 +811,57 @@ export function RunHealthPanel({ data }: { data: Record<string, unknown> }) {
 
 // ── 6. Staged slate ─────────────────────────────────────────────────────────
 
-export function SlatePanel({ selections }: { selections: StagedSelection[] }) {
+/** Colour per selection state. Pending is the only actionable one, so it is
+ *  the only one that gets a live colour; the rest read as history. */
+const SLATE_STATE_TONE: Record<string, string> = {
+  pending: 'var(--lime)',
+  confirmed: 'var(--blue)',
+  published: 'var(--steel-bright)',
+  superseded: 'var(--steel)',
+  cancelled: 'var(--steel)',
+}
+
+/** "nothing pending — 10 published, 23 cancelled for this window".
+ *
+ *  A bare "Nothing staged." was indistinguishable from a broken panel, and
+ *  against live data that was its normal state: 'pending' exists only between
+ *  the selector run and confirmation. */
+export function slateEmptyMessage(slate: StagedSlateResponse): string {
+  const { window, counts, pending } = slate
+  if (window.source === 'no_selections') {
+    return `No ${slate.league} selections on record at all.`
+  }
+  const span = window.start === window.end
+    ? window.start : `${window.start} → ${window.end}`
+  const others = Object.entries(counts)
+    .filter(([state]) => state !== 'pending')
+    .sort((a, b) => b[1] - a[1])
+    .map(([state, n]) => `${n} ${state}`)
+  if (pending === 0 && others.length > 0) {
+    return `Nothing pending — ${others.join(', ')} for ${span}.`
+  }
+  return `Nothing staged for ${span}.`
+}
+
+export function SlatePanel({ slate }: { slate: StagedSlateResponse }) {
+  const selections = slate.selections ?? []
   if (selections.length === 0) {
     return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
-                       color: 'var(--steel)' }}>Nothing staged.</p>
+                       color: 'var(--steel)' }}>{slateEmptyMessage(slate)}</p>
   }
+  const span = slate.window.start === slate.window.end
+    ? slate.window.start : `${slate.window.start} → ${slate.window.end}`
   return (
     <div>
+      <p style={{ padding: '8px var(--pad)', margin: 0, ...mono,
+                  fontSize: '11px', color: 'var(--steel)' }}>
+        {span} · {slate.pending} pending of {slate.total}
+      </p>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead><tr>
-          {['Player', 'Stat', 'Line', 'Proj', 'Edge', 'Conf', 'Tier', 'Pulled']
-            .map((h, i) => (
-            <th key={h} style={{ ...th, textAlign: i >= 2 && i <= 4 ? 'right' : 'left' }}>
+          {['Player', 'State', 'Stat', 'Line', 'Proj', 'Edge', 'Conf', 'Tier',
+            'Pulled'].map((h, i) => (
+            <th key={h} style={{ ...th, textAlign: i >= 3 && i <= 5 ? 'right' : 'left' }}>
               {h}</th>))}
         </tr></thead>
         <tbody>
@@ -732,6 +874,10 @@ export function SlatePanel({ selections }: { selections: StagedSelection[] }) {
                   {s.provenance.agent_run_short && ` · run ${s.provenance.agent_run_short}`}
                 </div>
               </td>
+              <td style={{ ...td, ...mono, fontSize: '10px',
+                           letterSpacing: '0.06em',
+                           color: SLATE_STATE_TONE[s.status] ?? 'var(--steel)' }}>
+                {s.status.toUpperCase()}</td>
               <td style={{ ...td, ...mono, fontSize: '11px' }}>{s.stat_type}</td>
               <td style={{ ...td, ...num }}>{s.line}</td>
               <td style={{ ...td, ...num }}>{s.our_projection}</td>

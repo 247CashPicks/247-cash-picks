@@ -1,7 +1,7 @@
 import { requireOperatorPage } from '@/lib/operator/guard'
 import { operatorFetch } from '@/lib/operator/client'
 import type {
-  AuditEntry, IndicatorConfig, IndicatorsResponse, StagedSelection,
+  AuditEntry, IndicatorConfig, IndicatorsResponse, StagedSlateResponse,
 } from '@/lib/operator/client'
 import CommandCenter from './CommandCenter'
 
@@ -42,7 +42,7 @@ export default async function CommandPage({
     operatorFetch<IndicatorsResponse>(`/operator/indicators?league=${league}&limit=200`),
     operatorFetch<{ configs: IndicatorConfig[] }>(`/operator/indicator-configs?league=${league}`),
     operatorFetch<{ entries: AuditEntry[] }>(`/operator/indicator-audit?league=${league}&limit=100`),
-    operatorFetch<{ selections: StagedSelection[] }>(`/operator/staged-slate?league=${league}`),
+    operatorFetch<StagedSlateResponse>(`/operator/staged-slate?league=${league}`),
     operatorFetch<Record<string, unknown>>('/operator/run-health'),
   ])
 
