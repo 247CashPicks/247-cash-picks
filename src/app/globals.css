@@ -216,3 +216,64 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   DataNexus / TAC design tokens — derived from the logo.
+   Brushed steel (T), electric blue (A), lime green (C), on deep navy.
+   docs/design_system.md is the brief; scripts/check-contrast.mjs enforces
+   the ratios. Task 3 extends these; it does not add a second palette.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --navy-void:    #070C14;
+  --navy-base:    #0B1220;
+  --navy-raised:  #111C2E;
+  --steel-line:   #1E2C40;
+  --steel:        #8695A8;
+  --steel-bright: #C3CEDB;
+  --blue:         #2F9BF0;
+  /* NON-TEXT ONLY: 3.52:1 on navy-base. Borders, fills, pressed states. */
+  --blue-dim:     #1B6FB0;
+  --lime:         #8FD14F;
+  --amber:        #E8A33D;
+  --alert:        #E2564D;
+
+  /* raw -> processed -> signal. State progression only, never decoration. */
+  --gradient-tac: linear-gradient(90deg, var(--steel) 0%, var(--blue) 55%, var(--lime) 100%);
+
+  --font-ui:   'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --pad-tight: 8px;
+  --pad:       14px;
+  --motion-fast: 120ms;
+}
+
+/* Numbers are the content: mono, tabular, decimal-aligned. */
+.dn-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dn-panel {
+  background: var(--navy-base);
+  border: 1px solid var(--steel-line);
+  /* No shadow anywhere: a shadow implies a card floating over a page, and
+     this is one surface. */
+}
+
+.dn-progress { background: var(--gradient-tac); height: 2px; }
+
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Motion shows data, never decoration — and never for a reader who asked
+   it not to. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
