@@ -27,6 +27,9 @@ export type ProjRow = Record<string, unknown> & {
   confidence_band: string | null
   _edgePct: number | null
   _headlineStat: string | null
+  /** null means the registry could not be read; do not present the values as
+   * endorsed in that state either. */
+  _excludedByGuard: boolean | null
 }
 
 export default function ProjectionsPanel(
@@ -64,7 +67,7 @@ export default function ProjectionsPanel(
 
   // Header + body share one template so they cannot drift as the column count
   // changes between sports (4 for NBA, 5 for NFL).
-  const grid = `2fr 60px ${cols.map(() => '80px').join(' ')} 80px 90px`
+  const grid = `2fr 60px ${cols.map(() => '80px').join(' ')} 160px 90px`
 
   const navBtn: React.CSSProperties = {
     background: 'transparent', border: `1px solid ${C.border}`, color: C.platinum,
@@ -126,6 +129,7 @@ export default function ProjectionsPanel(
       ) : (
         pageRows.map((p, i) => {
           const edgePct = p._edgePct
+          const excluded = p._excludedByGuard
           const edgeColor = edgePct != null
             ? edgePct >= 10 ? C.signalCyan
             : edgePct >= 5  ? C.platinum
@@ -158,12 +162,19 @@ export default function ProjectionsPanel(
                       : ci === 1 ? C.signalCyan
                       : ci === 2 ? C.platinum : C.muted,
                   }}>
-                    {typeof v === 'number' ? v.toFixed(c.digits) : '—'}
+                    {excluded === false && typeof v === 'number'
+                      ? v.toFixed(c.digits) : '—'}
                   </div>
                 )
               })}
               <div style={{ fontFamily: F.mono, color: edgeColor, fontWeight: 500, fontSize: '12px' }}>
-                {edgePct != null ? `${edgePct > 0 ? '+' : ''}${edgePct.toFixed(1)}%` : '—'}
+                {excluded === true
+                  ? 'EXCLUDED BY GUARD'
+                  : excluded === null
+                    ? 'GUARD UNAVAILABLE'
+                    : edgePct != null
+                      ? `${edgePct > 0 ? '+' : ''}${edgePct.toFixed(1)}%`
+                      : '—'}
               </div>
               <div>
                 <form action="/api/picks" method="POST">
@@ -171,11 +182,14 @@ export default function ProjectionsPanel(
                   <input type="hidden" name="projection_id" value={p.id} />
                   <button
                     type="submit"
+                    disabled={excluded !== false}
                     style={{
                       background: 'transparent', border: `1px solid ${C.borderEmphasis}`,
                       padding: '5px 10px', color: C.signalCyan,
                       fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
-                      letterSpacing: '0.08em', cursor: 'pointer',
+                      letterSpacing: '0.08em',
+                      cursor: excluded === false ? 'pointer' : 'not-allowed',
+                      opacity: excluded === false ? 1 : 0.45,
                     }}
                   >
                     + ADD

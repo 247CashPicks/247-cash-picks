@@ -40,6 +40,28 @@
       "summary",
       "window"
     ],
+    "ConfirmSelectionsResponse": [
+      "actor",
+      "already_confirmed",
+      "already_published",
+      "audit_logged",
+      "confirmed",
+      "errors",
+      "league",
+      "published",
+      "requested",
+      "status"
+    ],
+    "ExternalLineRanksResponse": [
+      "actor",
+      "audit_logged",
+      "league",
+      "rows_written",
+      "season",
+      "source",
+      "status",
+      "week"
+    ],
     "Indicator": [
       "backtest_effect",
       "backtest_report_path",

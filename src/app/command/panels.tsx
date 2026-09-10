@@ -5,6 +5,7 @@ import type {
   AgentHealthRow, AuditEntry, CompareResponse, Indicator, IndicatorConfig,
   IndicatorsResponse, OperatorMe, StagedSelection,
   StagedSlateResponse, PreviewRunResponse, NflScheduleContext,
+  ConfirmSelectionsResponse, ExternalLineRanksResponse,
 } from '@/lib/operator/client'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
@@ -860,8 +861,38 @@ export function slateEmptyMessage(slate: StagedSlateResponse): string {
   return `Nothing staged for ${span}.`
 }
 
-export function SlatePanel({ slate }: { slate: StagedSlateResponse }) {
+export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined }: {
+  slate: StagedSlateResponse
+  isOwner?: boolean
+  onChanged?: () => void | Promise<void>
+}) {
   const selections = slate.selections ?? []
+  const [selected, setSelected] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function confirm() {
+    if (!isOwner || selected.length === 0) return
+    setBusy(true); setError(null); setMessage(null)
+    const response = await fetch('/api/operator/staged-slate/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ league: slate.league, selection_ids: selected }),
+    })
+    const body = await response.json().catch(() => null) as
+      ConfirmSelectionsResponse | { detail?: { error?: string } } | null
+    setBusy(false)
+    if (!response.ok) {
+      const detail = body && 'detail' in body ? body.detail?.error : null
+      setError(detail ?? `Confirmation failed (${response.status})`)
+      return
+    }
+    const result = body as ConfirmSelectionsResponse
+    setSelected([])
+    setMessage(`${result.confirmed} confirmed · ${result.published} published`)
+    await onChanged()
+  }
+
   if (selections.length === 0) {
     return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
                        color: 'var(--steel)' }}>{slateEmptyMessage(slate)}</p>
@@ -876,14 +907,23 @@ export function SlatePanel({ slate }: { slate: StagedSlateResponse }) {
       </p>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead><tr>
-          {['Player', 'State', 'Stat', 'Line', 'Proj', 'Edge', 'Conf', 'Tier',
+          {['Select', 'Player', 'State', 'Stat', 'Line', 'Proj', 'Edge', 'Conf', 'Tier',
             'Pulled'].map((h, i) => (
-            <th key={h} style={{ ...th, textAlign: i >= 3 && i <= 5 ? 'right' : 'left' }}>
+            <th key={h} style={{ ...th, textAlign: i >= 4 && i <= 6 ? 'right' : 'left' }}>
               {h}</th>))}
         </tr></thead>
         <tbody>
           {selections.map((s) => (
             <tr key={s.id}>
+              <td style={td}>
+                {isOwner && s.status === 'pending' ? (
+                  <input type="checkbox" aria-label={`Select ${s.player_name}`}
+                    checked={selected.includes(s.id)}
+                    onChange={(event) => setSelected(current => event.target.checked
+                      ? [...current, s.id]
+                      : current.filter(id => id !== s.id))} />
+                ) : '—'}
+              </td>
               <td style={td}>
                 {s.player_name}
                 <div style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
@@ -908,13 +948,109 @@ export function SlatePanel({ slate }: { slate: StagedSlateResponse }) {
           ))}
         </tbody>
       </table>
-      <p style={{ padding: '8px var(--pad)', margin: 0, fontSize: '12px' }}>
-        {/* Confirmation stays where it lives. Duplicating the one human step
-            across two screens is how it gets done twice. */}
-        <a href="/dashboard/publish" style={{ color: 'var(--blue)' }}>
-          Confirm selections on the publish page →
-        </a>
+      <div style={{ padding: '10px var(--pad)', display: 'flex', gap: '10px',
+                    alignItems: 'center', flexWrap: 'wrap' }}>
+        {isOwner ? (
+          <button type="button" style={btn} disabled={busy || selected.length === 0}
+            onClick={confirm}>
+            {busy ? 'CONFIRMING + PUBLISHING…' : `CONFIRM + PUBLISH (${selected.length})`}
+          </button>
+        ) : (
+          <span style={{ color: 'var(--steel)', fontSize: '12px' }}>
+            Owner confirmation required.
+          </span>
+        )}
+        {message && <span role="status" style={{ color: 'var(--lime)', fontSize: '12px' }}>{message}</span>}
+        {error && <span role="alert" style={{ color: 'var(--alert)', fontSize: '12px' }}>{error}</span>}
+      </div>
+    </div>
+  )
+}
+
+// ── 7. External line ranks ─────────────────────────────────────────────────
+
+export function parseTeamRanks(text: string): { team: string; rank: number }[] {
+  const rows = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+    .map(line => {
+      const parts = line.split(/[\s,\t:]+/).filter(Boolean)
+      const firstRank = Number(parts[0])
+      return Number.isInteger(firstRank)
+        ? { team: parts[1]?.toUpperCase() ?? '', rank: firstRank }
+        : { team: parts[0]?.toUpperCase() ?? '', rank: Number(parts[1]) }
+    })
+  const teams = new Set(rows.map(row => row.team))
+  const ranks = new Set(rows.map(row => row.rank))
+  if (rows.length !== 32 || teams.size !== 32 || ranks.size !== 32
+      || [...ranks].some(rank => !Number.isInteger(rank) || rank < 1 || rank > 32)) {
+    throw new Error('Paste exactly 32 distinct teams with every rank 1–32 used once.')
+  }
+  return rows
+}
+
+export function LineRanksPanel({ schedule, onChanged }: {
+  schedule: NflScheduleContext | null
+  onChanged: () => void | Promise<void>
+}) {
+  const [unit, setUnit] = useState<'pff_ol' | 'pff_dl'>('pff_ol')
+  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10))
+  const [note, setNote] = useState('')
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    if (!schedule) return
+    setError(null); setMessage(null)
+    let ranks
+    try { ranks = parseTeamRanks(text) } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid ranks'); return
+    }
+    setBusy(true)
+    const response = await fetch('/api/operator/nfl-line-play/external', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ season: schedule.season, week: schedule.week,
+        source: unit, as_of: asOf, note: note.trim() || null, ranks }),
+    })
+    const body = await response.json().catch(() => null) as
+      ExternalLineRanksResponse | { detail?: { error?: string } } | null
+    setBusy(false)
+    if (!response.ok) {
+      const detail = body && 'detail' in body ? body.detail?.error : null
+      setError(detail ?? `Rank seed failed (${response.status})`); return
+    }
+    const result = body as ExternalLineRanksResponse
+    setMessage(`${result.rows_written} ${unit === 'pff_ol' ? 'OL' : 'DL'} ranks stored for Week ${result.week}.`)
+    await onChanged()
+  }
+
+  return (
+    <div style={{ padding: 'var(--pad)', display: 'grid', gap: '10px' }}>
+      <p style={{ margin: 0, color: 'var(--steel)', fontSize: '12px' }}>
+        {schedule ? `NFL ${schedule.season} · Week ${schedule.week}`
+          : 'No current NFL week is available; seeding is disabled.'}
       </p>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <select value={unit} onChange={event => setUnit(event.target.value as 'pff_ol' | 'pff_dl')}
+          aria-label="Line unit" style={dateInput}>
+          <option value="pff_ol">OFFENSIVE LINE</option>
+          <option value="pff_dl">DEFENSIVE LINE</option>
+        </select>
+        <input type="date" value={asOf} onChange={event => setAsOf(event.target.value)}
+          aria-label="Ranks as of" style={dateInput} />
+        <input value={note} onChange={event => setNote(event.target.value)}
+          placeholder="optional note" aria-label="Rank note"
+          style={{ ...dateInput, flex: 1 }} />
+      </div>
+      <textarea value={text} onChange={event => setText(event.target.value)}
+        aria-label="32 team ranks" rows={12}
+        placeholder={'BUF 1\nKC 2\n…'}
+        style={{ ...dateInput, marginLeft: 0, width: '100%', resize: 'vertical' }} />
+      <button type="button" onClick={submit} disabled={!schedule || busy} style={btn}>
+        {busy ? 'VALIDATING + STORING…' : 'STORE 32 RANKS'}
+      </button>
+      {message && <span role="status" style={{ color: 'var(--lime)', fontSize: '12px' }}>{message}</span>}
+      {error && <span role="alert" style={{ color: 'var(--alert)', fontSize: '12px' }}>{error}</span>}
     </div>
   )
 }

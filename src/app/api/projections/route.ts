@@ -3,6 +3,7 @@ import { guardRoute } from '@/lib/auth/guards'
 import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
+import { latestLiveProjections } from '@/lib/picks/projections'
 
 // GET /api/projections?date=2026-05-12&player=luka
 export async function GET(req: NextRequest) {
@@ -24,14 +25,17 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from('picks_projections')
     .select(`
-      id, player_name, team, position, is_starter,
+      id, created_at, player_name, team, position, is_starter,
       projected_minutes, proj_pts, proj_reb, proj_ast,
       proj_stl, proj_blk, proj_3pm,
+      proj_targets, proj_receptions, proj_rec_yds,
+      proj_carries, proj_rush_yds, proj_pass_yds,
       confidence_score, data_quality_flags,
       game_id, game_date
     `)
     .eq('brand_id', BRAND.slug)
     .eq('league', sport)
+    .eq('run_label', 'live')
     .eq('game_date', date)
     .order('confidence_score', { ascending: false })
 
@@ -45,7 +49,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const playerNames = (data || []).map(p => p.player_name)
+  const projections = latestLiveProjections(data || [])
+  const playerNames = projections.map(p => p.player_name)
 
   const { data: matchups } = await supabase
     .from('picks_matchups')
@@ -59,7 +64,7 @@ export async function GET(req: NextRequest) {
     (matchups || []).map(m => [m.player_name, m])
   )
 
-  const enriched = (data || []).map(proj => ({
+  const enriched = projections.map(proj => ({
     ...proj,
     matchup: matchupMap.get(proj.player_name) || null,
   }))

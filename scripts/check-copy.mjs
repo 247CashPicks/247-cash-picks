@@ -42,6 +42,12 @@ const BUCKET_D = [
   'guaranteed profit', 'guaranteed win', 'guaranteed winner', "can't lose",
   'cant lose', 'sure thing', 'risk free', 'risk-free', 'never lose',
 ]
+// Cross-league timing promises. NFL is week-shaped; these phrases silently
+// reintroduce the NBA same-day assumption onto the shared signal surface.
+const BUCKET_E = [
+  'published by 3:30 pm et', 'daily signals', 'daily output slate',
+  'fetch_signals --date=today',
+]
 
 /**
  * Allowlist — legitimate uses confirmed in the Task-1 inventory. Each entry
@@ -77,9 +83,11 @@ function scan(file) {
         violations.push({ rel, n: i + 1, term, bucket: 'B', line: line.trim() })
       }
     }
-    for (const phrase of [...BUCKET_C, ...BUCKET_D]) {
+    for (const phrase of [...BUCKET_C, ...BUCKET_D, ...BUCKET_E]) {
       if (lower.includes(phrase)) {
-        violations.push({ rel, n: i + 1, term: phrase, bucket: BUCKET_C.includes(phrase) ? 'C' : 'D', line: line.trim() })
+        const bucket = BUCKET_C.includes(phrase) ? 'C'
+          : BUCKET_D.includes(phrase) ? 'D' : 'E'
+        violations.push({ rel, n: i + 1, term: phrase, bucket, line: line.trim() })
       }
     }
   })

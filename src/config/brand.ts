@@ -52,13 +52,13 @@ export const BRAND = {
     {
       slug: 'core', label: 'Core', priceMonthly: 199, stripePriceId: '',
       mostPopular: false, color: '#34D399', gem: '◈', badge: 'Entry Node',
-      description: 'Daily signal outputs delivered. Your entry point into the quantitative desk.',
+      description: 'Signal outputs for each active slate. Your entry point into the quantitative desk.',
       picksLimit: 3,
     },
     {
       slug: 'signal', label: 'Signal', priceMonthly: 349, stripePriceId: '',
       mostPopular: false, color: '#38BDF8', gem: '◉', badge: 'Signal Receiver',
-      description: 'Full daily output slate plus read-only access to the projection data behind each signal.',
+      description: 'Full signal slate plus read-only access to the projection data behind each signal.',
       picksLimit: null,
     },
     {

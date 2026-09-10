@@ -305,3 +305,27 @@ export interface StagedSelection {
     snapshot_hash_short: string | null
   }
 }
+
+export interface ConfirmSelectionsResponse {
+  status: string
+  league: string
+  actor: string
+  requested: number
+  confirmed: number
+  published: number
+  already_confirmed: number
+  already_published: number
+  audit_logged: boolean
+  errors: string[]
+}
+
+export interface ExternalLineRanksResponse {
+  status: string
+  league: string
+  actor: string
+  season: number
+  week: number
+  source: string
+  rows_written: number
+  audit_logged: boolean
+}

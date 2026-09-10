@@ -8,7 +8,7 @@ const C = BRAND.colors
 const F = BRAND.fonts
 
 const FEATURE_LABELS: Record<string, string> = {
-  daily_signals:       'Daily signals delivered',
+  daily_signals:       'Signals delivered for each active slate',
   full_signal_slate:   'Full signal slate',
   accuracy_index:      'Accuracy Index access',
   projection_viewer:   'Projection viewer (read-only)',

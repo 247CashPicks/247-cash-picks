@@ -8,9 +8,10 @@ import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
 import { projectionForStat, isProjectedStat } from '@/lib/picks/stats'
 import type { TierSlug } from '@/lib/picks/types'
+import { visible_selections } from '@/lib/picks/visible_selections'
 
 // GET /api/picks?date=2026-05-12
-// Returns published picks for the date, filtered to subscriber tier
+// Returns the league-native published window, filtered to subscriber tier.
 export async function GET(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) {
@@ -20,21 +21,19 @@ export async function GET(req: NextRequest) {
   const wallet = await getWalletForUser(userId)
   const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
-  const date = req.nextUrl.searchParams.get('date')
+  const anchor = req.nextUrl.searchParams.get('date')
     || new Date().toISOString().split('T')[0]
 
   const sport = sportFromRequest(req)
   const supabase = createServiceClient()
-  const { data, error } = await supabase
-    .from('picks_published')
-    .select('*')
-    .eq('brand_id', BRAND.slug)
-    .eq('league', sport)
-    .eq('game_date', date)
-    .order('display_order', { ascending: true })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  let data
+  try {
+    data = await visible_selections(supabase, sport, anchor)
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Signal read failed' },
+      { status: 500 },
+    )
   }
 
   const filtered = (data || []).filter(pick =>
@@ -44,15 +43,13 @@ export async function GET(req: NextRequest) {
   // Core cap: 3 picks max
   const picks = tier === 'core' ? filtered.slice(0, 3) : filtered
 
-  return NextResponse.json({ picks, tier, total: data?.length || 0 })
+  return NextResponse.json({ picks, tier, total: data.length })
 }
 
 // POST /api/picks — operator actions (add to selections, publish all)
 export async function POST(req: NextRequest) {
-  // This endpoint had NO auth of any kind. `publish_all` promotes confirmed
-  // selections into picks_published and is what subscribers pay to read, so
-  // an anonymous caller could publish the slate. Operator tier, same gate as
-  // the dashboard pages that post to it.
+  // Manual staging is operator-only. Confirmation/publication is not exposed
+  // here; the owner-only /command flow owns that decision end to end.
   const denied = await guardOperatorRoute()
   if (denied) return denied
 
@@ -63,144 +60,13 @@ export async function POST(req: NextRequest) {
   const sport = sportFromRequest(req)
   const supabase = createServiceClient()
 
-  // Stage a selection for release: pending -> confirmed. The backend's
-  // picks_publisher promotes confirmed -> published; this is the operator's
-  // half of that handshake and the only step a human makes.
-  if (action === 'confirm' || action === 'unconfirm') {
-    const selectionId =
-      (body?.get('selection_id') as string | null) || jsonBody?.selection_id
-    if (!selectionId) {
-      return NextResponse.json({ error: 'selection_id required' }, { status: 400 })
-    }
-
-    const next = action === 'confirm' ? 'confirmed' : 'pending'
-    const from = action === 'confirm' ? 'pending' : 'confirmed'
-
-    const { data: updated, error: confirmErr } = await supabase
-      .from('picks_selections')
-      .update({
-        status: next,
-        confirmed_at: action === 'confirm' ? new Date().toISOString() : null,
-      })
-      .eq('brand_id', BRAND.slug)
-      .eq('league', sport)
-      .eq('id', selectionId)
-      // Only move a row that is in the expected state. Without this, a double
-      // submit could walk an already-published row back to confirmed and
-      // republish it.
-      .eq('status', from)
-      .select('id')
-
-    if (confirmErr) {
-      return NextResponse.json({ error: confirmErr.message }, { status: 500 })
-    }
-    if (!updated || updated.length === 0) {
-      return NextResponse.json(
-        { error: `No ${from} selection with that id — it may already have been `
-               + `actioned.` }, { status: 409 })
-    }
-
-    // Server-rendered form post: send the operator back to the page, which
-    // re-queries and shows the row in its new state.
-    return NextResponse.redirect(new URL('/dashboard/publish', req.url), 303)
-  }
-
-  // Publish all confirmed picks
-  if (action === 'publish_all') {
-    const { data: confirmed } = await supabase
-      .from('picks_selections')
-      .select('*')
-      .eq('brand_id', BRAND.slug)
-      .eq('league', sport)
-      // No game_date filter. NFL selections span a whole week (a Week 1 run
-      // stages 09-09 through 09-14), so a `= today` sweep published nothing
-      // for NFL on five days out of six. This also matches the backend
-      // publisher's own semantics: omit the date and it sweeps whatever is
-      // ready. For NBA, confirmed rows are same-day anyway, so nothing about
-      // the existing flow changes.
-      .eq('status', 'confirmed')
-
-    if (!confirmed || confirmed.length === 0) {
-      return NextResponse.json({ error: 'No confirmed picks to publish' }, { status: 400 })
-    }
-
-    const publishedRows = confirmed.map((s) => ({
-      brand_id: BRAND.slug,
-      // NOT NULL on picks_published. Carried from the selection rather than
-      // from `sport`, so a row can never be published under a league other
-      // than the one it was selected for.
-      league: s.league ?? sport,
-      selection_id: s.id,
-      game_date: s.game_date,
-      game_id: s.game_id,
-      player_name: s.player_name,
-      team: s.team,
-      stat_type: s.stat_type,
-      line: s.line,
-      our_projection: s.our_projection,
-      direction: s.direction,
-      confidence: s.confidence,
-      tier_required: s.tier_required,
-      platform: s.platform,
-      operator_notes: s.operator_notes,
-      display_order: s.display_order,
-      result: 'pending',
-    }))
-
-    const { error: insertError } = await supabase
-      .from('picks_published')
-      .insert(publishedRows)
-
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
-
-    await supabase
-      .from('picks_selections')
-      .update({ status: 'published', published_at: new Date().toISOString() })
-      .eq('brand_id', BRAND.slug)
-      .eq('league', sport)
-      .eq('status', 'confirmed')
-
-    // Trigger the backend publisher.
-    //
-    // This called ${BACKEND_URL}/publisher/fire, which does not exist. The real
-    // route is POST /agents/picks-publisher/run, it takes date and league as
-    // QUERY parameters rather than a JSON body, and it is Bearer-gated on
-    // CRON_SECRET. Because the call sits in a try/catch marked non-fatal, it
-    // has been 404ing silently on every publish — the rows went out, the
-    // backend sweep never ran.
-    //
-    // The date is deliberately omitted: the publisher sweeps every confirmed
-    // selection when given none, which is what a multi-date NFL slate needs,
-    // and it is idempotent so a re-run never double-publishes.
-    const backendUrl = process.env.BACKEND_URL
-    if (backendUrl) {
-      try {
-        const url = new URL(`${backendUrl}/agents/picks-publisher/run`)
-        url.searchParams.set('league', sport)
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.CRON_SECRET}`,
-            'X-Brand-Id': BRAND.slug,
-          },
-        })
-        if (!res.ok) {
-          // Log the status. The previous silent catch is how a 404 survived.
-          console.error('Publisher returned', res.status, await res.text())
-        }
-      } catch (e) {
-        console.error('Publisher trigger failed:', e)
-        // Non-fatal — rows are published; the sweep can be re-run by hand.
-      }
-    }
-
-    return NextResponse.json({
-      published: confirmed.length,
-      message: `${confirmed.length} picks published successfully`,
-    })
+  // Confirmation and publication intentionally do not live here. /command
+  // calls the owner-only backend operation that performs both in one request.
+  if (action === 'confirm' || action === 'unconfirm' || action === 'publish_all') {
+    return NextResponse.json(
+      { error: 'Selection confirmation has moved to /command.' },
+      { status: 410 },
+    )
   }
 
   // Add projection to selections queue

@@ -32,7 +32,7 @@ const instruments = [
     desc: 'Run the model against any historical slate. Surface accuracy by player, stat category, and matchup type. Export raw output to CSV for external analysis.',
   },
   {
-    id: '05', name: 'DAILY SIGNALS', tier: 'core+',
+    id: '05', name: 'SIGNALS', tier: 'core+',
     desc: 'Operator-reviewed model outputs published before each game slate. The projections with the largest gap to the published market number, confirmed and dated. Delivered to your dashboard ahead of the slate.',
   },
 ]
@@ -476,7 +476,7 @@ export default function LandingPage() {
             { value: '05', label: 'INSTRUMENTS' },
             { value: '07', label: 'AGENT PIPELINE' },
             { value: '240+', label: 'PTS / SLATE' },
-            { value: '06:00', label: 'DAILY REFRESH' },
+            { value: '06:00', label: 'SCHEDULED REFRESH' },
           ].map((stat, i) => (
             <div key={i} style={{
               padding: '44px 40px',
@@ -611,7 +611,7 @@ export default function LandingPage() {
             margin: '0 0 52px', maxWidth: '560px',
           }}>
             The Analytics Community is a private membership for serious NBA analysts.
-            Access to the engine is granted by tier — from daily signals through full
+            Access to the engine is granted by tier — from published signals through full
             model operator access with backtesting and raw data export.
           </p>
 
@@ -680,7 +680,7 @@ export default function LandingPage() {
               textDecoration: 'none',
               border: `1px solid ${C.border}`,
             }}>
-              VIEW DAILY SIGNALS
+              VIEW SIGNALS
             </a>
           </div>
         </div>
@@ -724,7 +724,7 @@ export default function LandingPage() {
                 }}>
                   Platform
                 </div>
-                {[['Daily Signals', '/picks'], ['Accuracy Index', '/tracker'], ['Membership', '/join']].map(([label, href]) => (
+                {[['Signals', '/picks'], ['Accuracy Index', '/tracker'], ['Membership', '/join']].map(([label, href]) => (
                   <div key={label} style={{ marginBottom: '10px' }}>
                     <a href={href} style={{
                       fontFamily: F.sans, fontSize: '13px', fontWeight: 400,

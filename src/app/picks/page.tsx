@@ -8,6 +8,7 @@ import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
 import PickCard from './PickCard'
 import PicksBrowser from './PicksBrowser'
+import { visible_selections } from '@/lib/picks/visible_selections'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,18 +16,9 @@ const C = BRAND.colors
 const F = BRAND.fonts
 
 
-async function getTodaysPicks(sport: Sport): Promise<PickPublished[]> {
+async function getVisiblePicks(sport: Sport): Promise<PickPublished[]> {
   const supabase = createServiceClient()
-  const today = new Date().toISOString().split('T')[0]
-  const { data } = await supabase
-    .from('picks_published')
-    .select('*')
-    .eq('brand_id', BRAND.slug)
-    .eq('league', sport)
-    .eq('game_date', today)
-    .eq('status', 'published')
-    .order('display_order', { ascending: true })
-  return (data || []) as PickPublished[]
+  return visible_selections(supabase, sport)
 }
 
 function UpgradeWall({ message, tier, price }: { message: string; tier: string; price: string }) {
@@ -75,7 +67,7 @@ export default async function PicksPage() {
   const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
   const sport = await getSport()
-  const picks = await getTodaysPicks(sport)
+  const picks = await getVisiblePicks(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
@@ -110,7 +102,7 @@ export default async function PicksPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
               <div>
                 <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '10px' }}>
-                  // DAILY SIGNALS
+                  // SIGNALS
                 </div>
                 <h1 style={{
                   fontFamily: F.sans, fontSize: 'clamp(20px,2.5vw,28px)', fontWeight: 500,
@@ -119,7 +111,7 @@ export default async function PicksPage() {
                   {today.toUpperCase()}
                 </h1>
                 <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint, letterSpacing: '0.04em' }}>
-                  {'> fetch_signals --date=today --status=published'}
+                  {'> fetch_signals --window=current --status=published'}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -167,8 +159,8 @@ export default async function PicksPage() {
                 SIGNALS PROCESSING
               </h2>
               <p style={{ fontFamily: F.mono, color: C.muted, fontSize: '13px', margin: 0, lineHeight: 1.7 }}>
-                Today&apos;s signals will be published by 3:30 PM ET.
-                {hasEarlyAccess && " You'll see them before everyone else."}
+                Signals appear after operator confirmation for the active slate.
+                {hasEarlyAccess && " You'll see confirmed signals first."}
               </p>
             </div>
           ) : (
@@ -206,7 +198,7 @@ export default async function PicksPage() {
                     ADDITIONAL SIGNALS AVAILABLE
                   </h3>
                   <p style={{ fontFamily: F.sans, color: C.muted, fontSize: '13px', margin: '0 0 20px', lineHeight: 1.6 }}>
-                    Upgrade to Signal tier for the full daily output slate.
+                    Upgrade to Signal tier for the full output slate.
                   </p>
                   <a href="/join?tier=signal" style={{
                     display: 'inline-block', background: C.signalCyan, color: C.void,

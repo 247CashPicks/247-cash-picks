@@ -9,7 +9,7 @@ import type {
 } from '@/lib/operator/client'
 import {
   AuditDrawer, ComparePanel, ConfigsPanel, IndicatorsPanel, PromotePanel,
-  RunHealthPanel, SlatePanel, Panel,
+  RunHealthPanel, SlatePanel, LineRanksPanel, Panel,
 } from './panels'
 
 /**
@@ -60,26 +60,25 @@ export default function CommandCenter({
   // Run health and the staged slate poll; everything else refreshes on action.
   // A toggle that moved because a timer fired would be indistinguishable from
   // one that moved because someone else changed it.
-  useEffect(() => {
-    let cancelled = false
-    const tick = async () => {
-      const [s, h] = await Promise.all([
-        fetch(`/api/operator/staged-slate?league=${league}`, { cache: 'no-store' }),
-        fetch('/api/operator/run-health', { cache: 'no-store' }),
-      ])
-      if (cancelled) return
-      const [sj, hj] = await Promise.all([s.json().catch(() => null),
-                                          h.json().catch(() => null)])
-      setLive({
-        slate: { ...slate, ok: s.ok, status: s.status, data: s.ok ? sj : null,
-                 error: s.ok ? null : 'Could not refresh the staged slate.' },
-        health: { ...health, ok: h.ok, status: h.status, data: h.ok ? hj : null,
-                  error: h.ok ? null : 'Could not refresh run health.' },
-      })
-    }
-    const id = setInterval(tick, 30_000)
-    return () => { cancelled = true; clearInterval(id) }
+  const refreshLive = useCallback(async () => {
+    const [s, h] = await Promise.all([
+      fetch(`/api/operator/staged-slate?league=${league}`, { cache: 'no-store' }),
+      fetch('/api/operator/run-health', { cache: 'no-store' }),
+    ])
+    const [sj, hj] = await Promise.all([s.json().catch(() => null),
+                                        h.json().catch(() => null)])
+    setLive({
+      slate: { ...slate, ok: s.ok, status: s.status, data: s.ok ? sj : null,
+               error: s.ok ? null : 'Could not refresh the staged slate.' },
+      health: { ...health, ok: h.ok, status: h.status, data: h.ok ? hj : null,
+                error: h.ok ? null : 'Could not refresh run health.' },
+    })
   }, [league, slate, health])
+
+  useEffect(() => {
+    const id = setInterval(refreshLive, 30_000)
+    return () => clearInterval(id)
+  }, [refreshLive])
 
   const refresh = useCallback(() => router.refresh(), [router])
 
@@ -158,9 +157,17 @@ export default function CommandCenter({
             {live.health.data && <RunHealthPanel data={live.health.data} />}
           </Panel>
           <Panel title="Staged slate" error={live.slate.error}>
-            {live.slate.data && <SlatePanel slate={live.slate.data} />}
+            {live.slate.data && (
+              <SlatePanel slate={live.slate.data} isOwner={me.is_owner}
+                onChanged={refreshLive} />
+            )}
           </Panel>
         </div>
+        {league === 'NFL' && (
+          <Panel title="PFF line ranks" error={null}>
+            <LineRanksPanel schedule={scheduleContext} onChanged={refresh} />
+          </Panel>
+        )}
       </main>
 
       {auditOpen && (

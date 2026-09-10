@@ -9,9 +9,10 @@ import { sportConfig, type Sport } from '@/lib/sport'
 import { AGENTS_BY_SPORT } from '@/lib/picks/agents'
 import AgentPipeline from './AgentPipeline'
 import ProjectionsPanel, { type ProjRow } from './ProjectionsPanel'
-import SignalQueuePanel, { type Selection } from './SignalQueuePanel'
 import BriefingsPanel from './BriefingsPanel'
 import { editionLabel, formatBriefingRange, type Briefing } from '@/lib/briefings'
+import { operatorFetch, type IndicatorsResponse } from '@/lib/operator/client'
+import { latestLiveProjections } from '@/lib/picks/projections'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,29 +80,21 @@ async function getDashboardData(sport: Sport) {
   let projQ = supabase
     .from('picks_projections').select('*')
     .eq('brand_id', BRAND.slug).eq('league', sport)
+    .eq('run_label', 'live')
   projQ = windowDays > 0
     ? projQ.gte('game_date', today).lte('game_date', upper)
     : projQ.eq('game_date', today)
 
-  let selQ = supabase
-    .from('picks_selections').select('*')
-    .eq('brand_id', BRAND.slug).eq('league', sport)
-    .in('status', ['pending', 'confirmed'])
-  selQ = windowDays > 0
-    ? selQ.gte('game_date', today).lte('game_date', upper)
-    : selQ.eq('game_date', today)
-
   let lineQ = supabase
     .from('picks_lines')
-    .select('player_name, stat_type, line, platform, edge_pct, recommended_side')
+    .select('player_name, stat_type, line, platform, edge_pct, recommended_side, game_date')
     .eq('brand_id', BRAND.slug).eq('league', sport)
   lineQ = windowDays > 0
     ? lineQ.gte('game_date', today).lte('game_date', upper)
     : lineQ.eq('game_date', today)
 
-  const [projectionsRes, selectionsRes, linesRes, gamesRes, briefingsRes, latestBriefingRes] = await Promise.all([
-    projQ.order('game_date', { ascending: true }).order('confidence_score', { ascending: false }),
-    selQ.order('game_date', { ascending: true }).order('display_order', { ascending: true }),
+  const [projectionsRes, linesRes, gamesRes, briefingsRes, latestBriefingRes, indicatorsRes] = await Promise.all([
+    projQ.order('created_at', { ascending: false }).order('confidence_score', { ascending: false }),
     lineQ.order('edge_pct', { ascending: false }),
     windowDays > 0
       ? supabase.from('picks_games').select('game_date, week')
@@ -116,15 +109,18 @@ async function getDashboardData(sport: Sport) {
       .select('id, brand_id, league, edition_type, slug, title, subtitle, body_md, summary, published_at, status, game_date_start, game_date_end, generated_at, edited_at')
       .eq('brand_id', BRAND.slug).eq('league', sport).eq('status', 'published')
       .order('published_at', { ascending: false }).limit(1).maybeSingle(),
+    operatorFetch<IndicatorsResponse>(`/operator/indicators?league=${sport}&limit=200`),
   ])
 
-  const projections = projectionsRes.data || []
+  const projections = latestLiveProjections(projectionsRes.data || [])
+  const guard = indicatorsRes.data?.indicators.find(
+    indicator => indicator.key === 'implausible_edge_pct')
   return {
     projections,
-    selections: selectionsRes.data || [],
     lines:      linesRes.data      || [],
     briefings:  (briefingsRes.data || []) as Briefing[],
     latestBriefing: (latestBriefingRes.data || null) as Briefing | null,
+    implausibleEdgePct: typeof guard?.value === 'number' ? guard.value : null,
     slate:      describeSlate(windowDays, projections, gamesRes.data || []),
   }
 }
@@ -138,7 +134,7 @@ export default async function DashboardPage() {
   if (!canAccess(tier, OPERATOR_TIER)) redirect('/tools')
 
   const sport = await getSport()
-  const { projections, selections, lines, slate, briefings, latestBriefing } = await getDashboardData(sport)
+  const { projections, lines, slate, briefings, latestBriefing, implausibleEdgePct } = await getDashboardData(sport)
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
@@ -155,14 +151,15 @@ export default async function DashboardPage() {
   // acting on.
   const headline = new Map<string, typeof lines[number]>()
   for (const l of lines) {
+    const key = `${l.player_name}\u0000${l.game_date}`
     if (sport === 'NBA') {
-      if (l.stat_type === 'pts') headline.set(l.player_name, l)
+      if (l.stat_type === 'pts') headline.set(key, l)
       continue
     }
-    const held = headline.get(l.player_name)
+    const held = headline.get(key)
     const better = held == null
       || Math.abs(l.edge_pct ?? 0) > Math.abs(held.edge_pct ?? 0)
-    if (better) headline.set(l.player_name, l)
+    if (better) headline.set(key, l)
   }
 
   const cols = PROJECTION_COLUMNS[sport]
@@ -170,12 +167,16 @@ export default async function DashboardPage() {
   // Enrich each projection with the headline line's edge + stat so the client
   // panel can filter/sort on them (the projection row itself carries neither).
   const projRows: ProjRow[] = projections.map(p => {
-    const h = headline.get(p.player_name)
-    return { ...p, _edgePct: h?.edge_pct ?? null, _headlineStat: h?.stat_type ?? null }
+    const h = headline.get(`${p.player_name}\u0000${p.game_date}`)
+    const edge = h?.edge_pct ?? null
+    return {
+      ...p,
+      _edgePct: edge,
+      _headlineStat: h?.stat_type ?? null,
+      _excludedByGuard: implausibleEdgePct == null
+        ? null : edge != null && Math.abs(edge) >= implausibleEdgePct,
+    }
   })
-
-  const pendingCount   = selections.filter(s => s.status === 'pending').length
-  const confirmedCount = selections.filter(s => s.status === 'confirmed').length
 
   return (
     <div style={{ background: C.void, minHeight: '100vh' }}>
@@ -216,21 +217,6 @@ export default async function DashboardPage() {
                 </div>
                 <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.dim, marginTop: '4px', letterSpacing: '0.08em' }}>PROJECTIONS</div>
               </div>
-              <div style={{ background: C.panel, border: `1px solid ${C.border}`, padding: '10px 18px', textAlign: 'center' }}>
-                <div style={{ fontFamily: F.mono, fontSize: 'clamp(18px,2vw,24px)', fontWeight: 500, color: confirmedCount > 0 ? C.signalCyan : C.muted, lineHeight: 1 }}>
-                  {confirmedCount}
-                </div>
-                <div style={{ fontFamily: F.mono, fontSize: '10px', color: C.dim, marginTop: '4px', letterSpacing: '0.08em' }}>READY TO TRANSMIT</div>
-              </div>
-              {confirmedCount > 0 && (
-                <a href="/dashboard/publish" style={{
-                  display: 'inline-block', background: C.signalCyan, color: C.void,
-                  padding: '12px 24px', fontFamily: F.mono, fontWeight: 500,
-                  fontSize: '13px', letterSpacing: '0.12em',
-                }}>
-                  TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
-                </a>
-              )}
             </div>
           </div>
         </div>
@@ -252,7 +238,7 @@ export default async function DashboardPage() {
             </a>
           )}
 
-          <div className="dashboard-layout">
+          <div>
 
             {/* Projections table */}
             <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
@@ -281,39 +267,6 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            {/* Signal queue */}
-            <div style={{ background: C.panel, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.signalCyan, letterSpacing: '0.12em', marginBottom: '4px' }}>
-                  // SIGNAL QUEUE
-                </div>
-                <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.dim, letterSpacing: '0.06em' }}>
-                  {pendingCount} PENDING · {confirmedCount} CONFIRMED
-                </div>
-              </div>
-
-              {selections.length === 0 ? (
-                <div style={{ padding: '32px 20px', textAlign: 'center', fontFamily: F.mono, color: C.muted, fontSize: '13px', lineHeight: 1.7 }}>
-                  No signals queued yet.<br />
-                  Add signals from the projections table.
-                </div>
-              ) : (
-                <SignalQueuePanel rows={selections as Selection[]} sport={sport} />
-              )}
-
-              {confirmedCount > 0 && (
-                <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.border}` }}>
-                  <a href="/dashboard/publish" style={{
-                    display: 'block', textAlign: 'center',
-                    background: C.signalCyan, color: C.void,
-                    padding: '12px', fontFamily: F.mono, fontWeight: 500,
-                    fontSize: '13px', letterSpacing: '0.12em',
-                  }}>
-                    TRANSMIT {confirmedCount} SIGNAL{confirmedCount !== 1 ? 'S' : ''} →
-                  </a>
-                </div>
-              )}
-            </div>
           </div>
           <BriefingsPanel rows={briefings} sport={sport} />
         </div>
