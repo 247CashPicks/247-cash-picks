@@ -9,6 +9,7 @@ import type { Sport } from '@/lib/sport'
 import PickCard from './PickCard'
 import PicksBrowser from './PicksBrowser'
 import { visible_selections } from '@/lib/picks/visible_selections'
+import { PLATFORM_TIME_ZONE } from '@/lib/time/eastern'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,7 +70,7 @@ export default async function PicksPage() {
   const sport = await getSport()
   const picks = await getVisiblePicks(sport)
   const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'long', month: 'long', day: 'numeric', timeZone: PLATFORM_TIME_ZONE,
   })
 
   const visibleLimit   = tier === 'core' ? 3 : picks.length

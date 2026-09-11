@@ -70,7 +70,8 @@ function renderPage(selectedConfigId: string | null,
       configs={ok({ configs: [LIVE_CFG, TEST_CFG] })}
       audit={ok({ entries: [] })}
       slate={ok({ league: 'NFL', limit: 50, offset: 0,
-                  window: { start: null, end: null, source: 'no_selections' as const },
+                  window: { start: null, end: null, source: 'no_schedule' as const,
+                            week: null },
                   counts: {}, total: 0, pending: 0, selections: [] })}
       health={ok({ agents: [] } as Record<string, unknown>)}
     />,

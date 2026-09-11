@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
 import { latestLiveProjections } from '@/lib/picks/projections'
+import { easternToday } from '@/lib/time/eastern'
 
 // GET /api/projections?date=2026-05-12&player=luka
 export async function GET(req: NextRequest) {
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   const supabase = createServiceClient()
 
   const date = req.nextUrl.searchParams.get('date')
-    || new Date().toISOString().split('T')[0]
+    || easternToday()
   const playerQuery = req.nextUrl.searchParams.get('player')
 
   let query = supabase

@@ -13,6 +13,7 @@ import BriefingsPanel from './BriefingsPanel'
 import { editionLabel, formatBriefingRange, type Briefing } from '@/lib/briefings'
 import { operatorFetch, type IndicatorsResponse } from '@/lib/operator/client'
 import { latestLiveProjections } from '@/lib/picks/projections'
+import { addCalendarDays, easternToday, PLATFORM_TIME_ZONE } from '@/lib/time/eastern'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,13 +69,13 @@ function describeSlate(
 
 async function getDashboardData(sport: Sport) {
   const supabase = createServiceClient()
-  const today = new Date().toISOString().split('T')[0]
+  const today = easternToday()
   const windowDays = sportConfig(sport).slateWindowDays
   // NBA: today only, unchanged. NFL: the upcoming window [today, today + N] —
   // a whole week stages at once, so a same-day filter showed an empty board on
   // five days out of six while ten selections sat waiting.
   const upper = windowDays > 0
-    ? new Date(Date.parse(today) + windowDays * 86_400_000).toISOString().split('T')[0]
+    ? addCalendarDays(today, windowDays)
     : today
 
   let projQ = supabase
@@ -136,7 +137,7 @@ export default async function DashboardPage() {
   const sport = await getSport()
   const { projections, lines, slate, briefings, latestBriefing, implausibleEdgePct } = await getDashboardData(sport)
   const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'long', month: 'long', day: 'numeric', timeZone: PLATFORM_TIME_ZONE,
   })
 
   // The headline line for each player, i.e. the one the EDGE column reports.

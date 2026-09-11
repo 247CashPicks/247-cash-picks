@@ -448,7 +448,8 @@ function sel(name: string, status: string): StagedSelection {
 function slate(over: Partial<StagedSlateResponse> = {}): StagedSlateResponse {
   return {
     league: 'NFL', limit: 50, offset: 0,
-    window: { start: '2026-09-13', end: '2026-09-14', source: 'upcoming' },
+    window: { start: '2026-09-13', end: '2026-09-14',
+              source: 'schedule_week', week: 1 },
     counts: {}, total: 0, pending: 0, selections: [], ...over,
   }
 }
@@ -484,13 +485,14 @@ describe('staged slate', () => {
     expect(message).toContain('2026-09-13')
   })
 
-  it('distinguishes an empty window from a league with no selections at all', () => {
+  it('keeps the NBA date window even when it contains no selections', () => {
     /* Live NBA when this was written: zero selections, ever. */
     const message = slateEmptyMessage(slate({
-      window: { start: null, end: null, source: 'no_selections' },
+      window: { start: '2026-09-10', end: '2026-09-10',
+                source: 'eastern_today', week: null },
       league: 'NBA',
     }))
-    expect(message).toContain('No NBA selections on record at all')
+    expect(message).toContain('Nothing staged for 2026-09-10')
   })
 
   it('never renders the bare string the old panel used', () => {

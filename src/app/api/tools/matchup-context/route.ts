@@ -6,6 +6,7 @@ import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
+import { easternToday } from '@/lib/time/eastern'
 
 export async function GET(req: NextRequest) {
   const { userId } = await auth()
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   const player   = req.nextUrl.searchParams.get('player') ?? ''
   const dateParam = req.nextUrl.searchParams.get('date')  ?? ''
-  const date     = dateParam || new Date().toISOString().split('T')[0]
+  const date     = dateParam || easternToday()
 
   if (!player) {
     return NextResponse.json({ error: 'player param required' }, { status: 400 })

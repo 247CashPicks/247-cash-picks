@@ -2,15 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { BRAND } from '@/config/brand'
 import type { Sport } from '@/lib/sport'
 import type { PickPublished } from '@/lib/picks/types'
+import { addCalendarDays, easternToday } from '@/lib/time/eastern'
 
 export interface ScheduledGame {
   game_date: string
   week: number | null
-}
-
-function shiftDate(day: string, amount: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + amount * 86_400_000)
-    .toISOString().slice(0, 10)
 }
 
 /** The league-native signal window. Exported for the regression proof. */
@@ -39,7 +35,7 @@ export function leagueWindowDates(
 export async function visible_selections(
   supabase: SupabaseClient,
   sport: Sport,
-  anchor = new Date().toISOString().slice(0, 10),
+  anchor = easternToday(),
 ): Promise<PickPublished[]> {
   let dates = [anchor]
   if (sport === 'NFL') {
@@ -48,8 +44,8 @@ export async function visible_selections(
       .select('game_date, week')
       .eq('brand_id', BRAND.slug)
       .eq('league', sport)
-      .gte('game_date', shiftDate(anchor, -6))
-      .lte('game_date', shiftDate(anchor, 7))
+      .gte('game_date', addCalendarDays(anchor, -6))
+      .lte('game_date', addCalendarDays(anchor, 7))
       .order('game_date', { ascending: true })
     if (gamesError) throw new Error(gamesError.message)
     dates = leagueWindowDates(sport, anchor, games ?? [])

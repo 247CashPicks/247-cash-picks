@@ -9,6 +9,7 @@ import { sportFromRequest } from '@/lib/sport/request'
 import { projectionForStat, isProjectedStat } from '@/lib/picks/stats'
 import type { TierSlug } from '@/lib/picks/types'
 import { visible_selections } from '@/lib/picks/visible_selections'
+import { easternToday } from '@/lib/time/eastern'
 
 // GET /api/picks?date=2026-05-12
 // Returns the league-native published window, filtered to subscriber tier.
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   const tier = (wallet?.tier_slug ?? 'core') as TierSlug
 
   const anchor = req.nextUrl.searchParams.get('date')
-    || new Date().toISOString().split('T')[0]
+    || easternToday()
 
   const sport = sportFromRequest(req)
   const supabase = createServiceClient()

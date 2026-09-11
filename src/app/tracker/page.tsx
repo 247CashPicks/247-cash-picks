@@ -5,6 +5,7 @@ import { BRAND } from '@/config/brand'
 import { getSport } from '@/lib/sport/server'
 import type { Sport } from '@/lib/sport'
 import ResolutionLog, { type ResultRow } from './ResolutionLog'
+import { addCalendarDays, easternToday } from '@/lib/time/eastern'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -32,7 +33,7 @@ const LEDGER_CAP = 500
 
 async function getRecentResults(sport: Sport) {
   const supabase = createServiceClient()
-  const from = new Date(Date.now() - LEDGER_WINDOW_DAYS * 86_400_000).toISOString().split('T')[0]
+  const from = addCalendarDays(easternToday(), -LEDGER_WINDOW_DAYS)
   const { data } = await supabase
     .from('picks_published')
     .select('player_name, team, stat_type, line, direction, result, actual_value, game_date, our_projection, confidence')

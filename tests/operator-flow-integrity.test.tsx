@@ -1,16 +1,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LineRanksPanel, SlatePanel, parseTeamRanks } from '@/app/command/panels'
+import { LineRanksPanel, SlatePanel, parseTeamRanks, stagedSlateHeading } from '@/app/command/panels'
 import ProjectionsPanel, { type ProjRow } from '@/app/dashboard/ProjectionsPanel'
 import { latestLiveProjections } from '@/lib/picks/projections'
 import { leagueWindowDates } from '@/lib/picks/visible_selections'
 import type { NflScheduleContext, StagedSlateResponse } from '@/lib/operator/client'
+import { easternToday } from '@/lib/time/eastern'
 
 afterEach(() => vi.restoreAllMocks())
 
 const slate: StagedSlateResponse = {
   league: 'NFL', limit: 50, offset: 0,
-  window: { start: '2026-09-09', end: '2026-09-14', source: 'current_week' },
+  window: { start: '2026-09-09', end: '2026-09-14',
+    source: 'schedule_week', week: 1 },
   counts: { pending: 2 }, total: 2, pending: 2,
   selections: ['Christian McCaffrey', 'Puka Nacua'].map((name, index) => ({
     id: `sel-${index}`, player_name: name, team: index ? 'LAR' : 'SF',
@@ -24,6 +26,10 @@ const slate: StagedSlateResponse = {
 }
 
 describe('league-native visibility', () => {
+  it('keeps the Eastern game date after UTC midnight', () => {
+    expect(easternToday(new Date('2026-09-11T00:30:00Z'))).toBe('2026-09-10')
+  })
+
   it('shows the complete NFL week on Thursday, including earlier and later dates', () => {
     const games = [
       { game_date: '2026-09-09', week: 1 },
@@ -35,6 +41,10 @@ describe('league-native visibility', () => {
     expect(leagueWindowDates('NFL', '2026-09-10', games)).toEqual([
       '2026-09-09', '2026-09-10', '2026-09-13', '2026-09-14',
     ])
+  })
+
+  it('names the NFL week and its schedule range in the panel heading', () => {
+    expect(stagedSlateHeading(slate)).toBe('NFL Week 1 · Sep 9–14')
   })
 
   it('keeps only the latest live projection and excludes all preview rows', () => {

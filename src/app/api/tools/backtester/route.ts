@@ -5,6 +5,7 @@ import { TOOL_MIN_TIERS } from '@/lib/picks/tiers'
 import { statsFor } from '@/lib/picks/stats'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
+import { easternToday } from '@/lib/time/eastern'
 
 export async function POST(req: NextRequest) {
   // Checked login but never the tier. TOOL_MIN_TIERS.backtester is 'nexus',
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
     clerk_user_id: userId,
     tier_slug: tier,
     tool_used: 'backtester',
-    game_date: dateFrom || new Date().toISOString().split('T')[0],
+    game_date: dateFrom || easternToday(),
     session_saved: false,
     input_source: 'agent_prefill',
   })

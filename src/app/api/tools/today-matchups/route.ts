@@ -6,6 +6,7 @@ import { canAccess } from '@/lib/picks/tiers'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
+import { easternToday } from '@/lib/time/eastern'
 
 interface MatchupDbRow {
   player_name: string
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
   }
 
   const dateParam = req.nextUrl.searchParams.get('date') ?? ''
-  const date      = dateParam || new Date().toISOString().split('T')[0]
+  const date      = dateParam || easternToday()
 
   // NBA-only by construction (per-36 over shared on-court minutes / 1-on-1
   // defender iso). Returns an honest empty result rather than querying NBA

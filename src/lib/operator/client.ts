@@ -272,9 +272,10 @@ export interface StagedSlateResponse {
   window: {
     start: string | null
     end: string | null
-    /** How the window was chosen: an explicit request, the league's upcoming
-     *  game dates, the most recent slate on file, or nothing at all. */
-    source: 'requested' | 'upcoming' | 'most_recent' | 'no_selections'
+    week: number | null
+    /** An explicit request, the NFL schedule week, Eastern today for NBA, or
+     *  no stored schedule from which to resolve an NFL week. */
+    source: 'requested' | 'schedule_week' | 'eastern_today' | 'no_schedule'
   }
   counts: Record<string, number>
   total: number

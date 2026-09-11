@@ -5,6 +5,7 @@ import { BRAND } from '@/config/brand'
 import { useSport } from '@/lib/sport/client'
 import { runProjection, LEAGUE_DEFAULTS } from '@/lib/picks/model'
 import type { ProjectionInputs, ProjectionOutputs } from '@/lib/picks/types'
+import { easternToday } from '@/lib/time/eastern'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -252,7 +253,7 @@ export default function ProjectionRunnerPage() {
     setShowSuggestions(false)
     setHighlightedIdx(-1)
 
-    const today = new Date().toISOString().split('T')[0]
+    const today = easternToday()
     const [statsResult, matchupResult] = await Promise.allSettled([
       fetch(`/api/players/stats?player=${encodeURIComponent(player.player_name)}&team=${encodeURIComponent(player.team)}`),
       fetch(`/api/tools/matchup-context?player=${encodeURIComponent(player.player_name)}&date=${today}`),

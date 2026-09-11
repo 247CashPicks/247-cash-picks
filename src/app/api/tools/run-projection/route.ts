@@ -6,6 +6,7 @@ import { runProjection } from '@/lib/picks/model'
 import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
 import type { ProjectionInputs } from '@/lib/picks/types'
+import { easternToday } from '@/lib/time/eastern'
 
 export async function POST(req: NextRequest) {
   // NOT in the recon's list of four holes, but the same class: this route had
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     ? 'agent_prefill'
     : agentValues ? 'mixed' : 'subscriber_override'
 
-  const today = gameDate || new Date().toISOString().split('T')[0]
+  const today = gameDate || easternToday()
 
   const { data: session } = await supabase
     .from('picks_tool_sessions')

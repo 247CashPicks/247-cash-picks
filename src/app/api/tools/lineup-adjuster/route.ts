@@ -7,6 +7,7 @@ import { BRAND } from '@/config/brand'
 import { SPORT_CONFIG } from '@/lib/sport'
 import { sportFromRequest } from '@/lib/sport/request'
 import type { TierSlug } from '@/lib/picks/types'
+import { easternToday } from '@/lib/time/eastern'
 
 // Use an index-signature interface so select('*') doesn't require every column to be declared.
 // The _adj columns have no confirmed SQL migration — they may be absent from the result.
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
   }
 
   const dateParam = req.nextUrl.searchParams.get('date') ?? ''
-  const date      = dateParam || new Date().toISOString().split('T')[0]
+  const date      = dateParam || easternToday()
 
   // NBA-only by construction (per-36 over shared on-court minutes / 1-on-1
   // defender iso). Returns an honest empty result rather than querying NBA

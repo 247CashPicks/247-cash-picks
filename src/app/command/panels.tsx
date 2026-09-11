@@ -7,6 +7,7 @@ import type {
   StagedSlateResponse, PreviewRunResponse, NflScheduleContext,
   ConfirmSelectionsResponse, ExternalLineRanksResponse,
 } from '@/lib/operator/client'
+import { easternToday } from '@/lib/time/eastern'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
 const num: React.CSSProperties = {
@@ -391,7 +392,7 @@ export function ComparePanel({ league, config, compare, error, schedule,
   onCompare: (c: CompareResponse | null) => void
   onError: (e: string | null) => void
 }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = easternToday()
   const [start, setStart] = useState(today)
   const [end, setEnd] = useState(today)
   // NFL is week-shaped: the projector selects a week's games by week number
@@ -846,8 +847,8 @@ const SLATE_STATE_TONE: Record<string, string> = {
  *  the selector run and confirmation. */
 export function slateEmptyMessage(slate: StagedSlateResponse): string {
   const { window, counts, pending } = slate
-  if (window.source === 'no_selections') {
-    return `No ${slate.league} selections on record at all.`
+  if (window.source === 'no_schedule') {
+    return `No current ${slate.league} schedule window is available.`
   }
   const span = window.start === window.end
     ? window.start : `${window.start} → ${window.end}`
@@ -859,6 +860,27 @@ export function slateEmptyMessage(slate: StagedSlateResponse): string {
     return `Nothing pending — ${others.join(', ')} for ${span}.`
   }
   return `Nothing staged for ${span}.`
+}
+
+function shortDate(day: string): { month: string; date: string } {
+  const parsed = new Date(`${day}T00:00:00Z`)
+  return {
+    month: parsed.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }),
+    date: parsed.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'UTC' }),
+  }
+}
+
+export function stagedSlateHeading(slate: StagedSlateResponse): string {
+  const { start, end, week } = slate.window
+  if (!start || !end) return `${slate.league} slate unavailable`
+  const first = shortDate(start)
+  const last = shortDate(end)
+  const range = first.month === last.month
+    ? `${first.month} ${first.date}–${last.date}`
+    : `${first.month} ${first.date}–${last.month} ${last.date}`
+  return slate.league === 'NFL' && week != null
+    ? `NFL Week ${week} · ${range}`
+    : `${slate.league} · ${range}`
 }
 
 export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined }: {
@@ -897,13 +919,11 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
     return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
                        color: 'var(--steel)' }}>{slateEmptyMessage(slate)}</p>
   }
-  const span = slate.window.start === slate.window.end
-    ? slate.window.start : `${slate.window.start} → ${slate.window.end}`
   return (
     <div>
       <p style={{ padding: '8px var(--pad)', margin: 0, ...mono,
                   fontSize: '11px', color: 'var(--steel)' }}>
-        {span} · {slate.pending} pending of {slate.total}
+        {stagedSlateHeading(slate)} · {slate.pending} pending of {slate.total}
       </p>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead><tr>
@@ -992,7 +1012,7 @@ export function LineRanksPanel({ schedule, onChanged }: {
   onChanged: () => void | Promise<void>
 }) {
   const [unit, setUnit] = useState<'pff_ol' | 'pff_dl'>('pff_ol')
-  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10))
+  const [asOf, setAsOf] = useState(easternToday())
   const [note, setNote] = useState('')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)

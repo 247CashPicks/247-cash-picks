@@ -5,6 +5,7 @@ import { BRAND } from '@/config/brand'
 import { statsFor, statLabel, isStatOfSport } from '@/lib/picks/stats'
 import { useSport } from '@/lib/sport/client'
 import type { StatType } from '@/lib/picks/types'
+import { addCalendarDays, easternToday } from '@/lib/time/eastern'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -29,12 +30,9 @@ interface BacktestResult {
 }
 
 function computeDateRange(range: DateRange): { dateFrom: string; dateTo: string } {
-  const today  = new Date()
-  const dateTo = today.toISOString().split('T')[0]
+  const dateTo = easternToday()
   const daysBack = range === '7d' ? 7 : 30
-  const from = new Date(today)
-  from.setDate(from.getDate() - daysBack)
-  return { dateFrom: from.toISOString().split('T')[0], dateTo }
+  return { dateFrom: addCalendarDays(dateTo, -daysBack), dateTo }
 }
 
 function rateColor(rate: number): string {
