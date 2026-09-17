@@ -59,6 +59,26 @@ export async function POST(req: NextRequest) {
   const url = `${BACKEND_URL}/agents/${def.backendPath}/run${qs ? `?${qs}` : ''}`
   const started = Date.now()
 
+  /**
+   * The same values go in the QUERY STRING and the JSON BODY, because the
+   * backend has both kinds of route and this proxy serves all of them.
+   *
+   * It used to send a Content-Type of application/json and no body at all. The
+   * four routes that declare a Pydantic body answered 422 "body: Field
+   * required" — rejected at request validation, before run_logged._start, so
+   * picks_agent_runs held no row to explain it — and the `!res.ok` branch below
+   * turned that into a 502. It read as a timeout on the heavy agents. It was
+   * nothing of the kind: the two that "worked" were simply the two whose route
+   * takes query parameters, and briefing-writer failed because its two
+   * required fields were being sent as query parameters to a route that reads
+   * them from the body.
+   *
+   * Query-only routes ignore a body; Pydantic models ignore unknown fields.
+   * Sending both is therefore safe for every route and correct for each.
+   */
+  const payload: Record<string, string> = {}
+  for (const [k, v] of params) payload[k] = v
+
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -66,6 +86,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${CRON_SECRET}`,
       },
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(DISPATCH_TIMEOUT_MS),
     })
 
@@ -74,9 +95,15 @@ export async function POST(req: NextRequest) {
     try { result = JSON.parse(text) } catch { result = text }
 
     if (!res.ok) {
+      // Pass the backend's own status through for a 4xx. Reporting a 422 as a
+      // 502 is what sent this investigation looking for a Railway timeout: a
+      // gateway status says "the upstream failed", and the upstream had in
+      // fact answered immediately and correctly that the request was invalid.
+      const status = res.status >= 400 && res.status < 500 ? res.status : 502
       return NextResponse.json(
-        { ok: false, agent: agentKey, sport, date: date || null, status: res.status, detail: result },
-        { status: 502 },
+        { ok: false, agent: agentKey, sport, date: date || null,
+          status: res.status, detail: result },
+        { status },
       )
     }
 
