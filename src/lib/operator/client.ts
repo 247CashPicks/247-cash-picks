@@ -330,3 +330,77 @@ export interface ExternalLineRanksResponse {
   rows_written: number
   audit_logged: boolean
 }
+
+// ── Operator line entry ─────────────────────────────────────────────────────
+//
+// Lines are a layer on the slate, not a precondition for it. NFL's single
+// automated source refuses us, so an operator supplies a week's lines by
+// paste — and the parse step exists so a misparsed name is caught before it
+// becomes a line against the wrong player.
+
+export interface LineEntryPlayer {
+  player_name: string
+  player_name_key: string
+  team: string | null
+  game_date: string
+  /** Per stat key, e.g. { rec_yds: 88.4 }. Drives the pre-fill ordering. */
+  projections: Record<string, number | null>
+  rank_value: number
+  /** Lines already on file, so a replacement is visible before it happens. */
+  existing_lines: Record<string, number>
+}
+
+export interface LineEntrySlate {
+  league: string
+  from_date: string
+  game_dates: string[]
+  stat_types: string[]
+  /** Stats with no projection column — a line on them can never price. */
+  unpriceable_stat_types: string[]
+  platforms: string[]
+  player_count: number
+  players: LineEntryPlayer[]
+}
+
+export interface LineEntryMatch {
+  line_number: number
+  raw: string
+  player_name: string
+  player_name_key: string
+  team: string | null
+  game_date: string
+  stat_type: string
+  line: number
+  our_projection: number | null
+  replaces_existing: boolean
+  warnings: string[]
+}
+
+export interface LineEntryMiss {
+  line_number: number
+  raw: string
+  parsed_name: string | null
+  stat_type: string | null
+  line: number | null
+  problems: string[]
+}
+
+export interface LineEntryParse {
+  league: string
+  parsed: number
+  matched_count: number
+  unmatched_count: number
+  matched: LineEntryMatch[]
+  unmatched: LineEntryMiss[]
+}
+
+export interface LineEntryResult {
+  status: string
+  league: string
+  platform: string
+  line_source: string
+  actor: string
+  written: number
+  errors: string[]
+  game_dates: string[]
+}

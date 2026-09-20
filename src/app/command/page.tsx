@@ -2,6 +2,7 @@ import { requireOperatorPage } from '@/lib/operator/guard'
 import { operatorFetch } from '@/lib/operator/client'
 import type {
   AuditEntry, IndicatorConfig, IndicatorsResponse, StagedSlateResponse,
+  LineEntrySlate,
 } from '@/lib/operator/client'
 import CommandCenter from './CommandCenter'
 
@@ -53,12 +54,13 @@ export default async function CommandPage({
     + (selectedConfigId
        ? `&config_id=${encodeURIComponent(selectedConfigId)}` : '')
 
-  const [indicators, configs, audit, slate, health] = await Promise.all([
+  const [indicators, configs, audit, slate, health, lineSlate] = await Promise.all([
     operatorFetch<IndicatorsResponse>(indicatorsPath),
     operatorFetch<{ configs: IndicatorConfig[] }>(`/operator/indicator-configs?league=${league}`),
     operatorFetch<{ entries: AuditEntry[] }>(`/operator/indicator-audit?league=${league}&limit=100`),
     operatorFetch<StagedSlateResponse>(`/operator/staged-slate?league=${league}`),
     operatorFetch<Record<string, unknown>>('/operator/run-health'),
+    operatorFetch<LineEntrySlate>(`/operator/line-entry/slate?league=${league}`),
   ])
 
   return (
@@ -72,6 +74,7 @@ export default async function CommandPage({
       audit={audit}
       slate={slate}
       health={health}
+      lineSlate={lineSlate}
     />
   )
 }

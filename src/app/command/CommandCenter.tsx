@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation'
 import type {
   AuditEntry, CompareResponse, Indicator, IndicatorConfig,
   IndicatorsResponse, OperatorMe, OperatorResult,
-  NflScheduleContext, StagedSlateResponse,
+  NflScheduleContext, StagedSlateResponse, LineEntrySlate,
 } from '@/lib/operator/client'
 import {
   AuditDrawer, ComparePanel, ConfigsPanel, IndicatorsPanel, PromotePanel,
-  RunHealthPanel, SlatePanel, LineRanksPanel, Panel,
+  RunHealthPanel, SlatePanel, LineRanksPanel, LineEntryPanel, Panel,
 } from './panels'
 
 /**
@@ -24,7 +24,7 @@ export interface PanelData<T> extends OperatorResult<T> {}
 
 export default function CommandCenter({
   me, league, leagues, selectedConfigId,
-  indicators, configs, audit, slate, health,
+  indicators, configs, audit, slate, health, lineSlate,
 }: {
   me: OperatorMe
   league: string
@@ -39,6 +39,9 @@ export default function CommandCenter({
   audit: PanelData<{ entries: AuditEntry[] }>
   slate: PanelData<StagedSlateResponse>
   health: PanelData<Record<string, unknown>>
+  /** The slate an operator enters lines against. Lines are a layer on
+   *  the slate now, not a precondition for it. */
+  lineSlate: PanelData<LineEntrySlate>
 }) {
   const router = useRouter()
 
@@ -168,6 +171,13 @@ export default function CommandCenter({
             <LineRanksPanel schedule={scheduleContext} onChanged={refresh} />
           </Panel>
         )}
+
+        {/* Not NFL-gated: any league whose projections exist can take lines,
+            and the panel says so itself when the slate is empty. */}
+        <Panel title="Line entry" error={null}>
+          <LineEntryPanel league={league} slate={lineSlate.data}
+            error={lineSlate.error} onChanged={refresh} />
+        </Panel>
       </main>
 
       {auditOpen && (

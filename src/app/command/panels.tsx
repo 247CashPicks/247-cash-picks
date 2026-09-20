@@ -5,6 +5,7 @@ import type {
   AgentHealthRow, AuditEntry, CompareResponse, Indicator, IndicatorConfig,
   IndicatorsResponse, OperatorMe, StagedSelection,
   StagedSlateResponse, PreviewRunResponse, NflScheduleContext,
+  LineEntrySlate, LineEntryParse, LineEntryResult,
   ConfirmSelectionsResponse, ExternalLineRanksResponse,
 } from '@/lib/operator/client'
 import { easternToday } from '@/lib/time/eastern'
@@ -1134,5 +1135,317 @@ export function AuditDrawer({ entries, error, onClose }: {
         ))}
       </ul>
     </aside>
+  )
+}
+
+// ── Operator line entry ─────────────────────────────────────────────────────
+//
+// Lines are a layer on the slate, not a precondition for it. This panel has to
+// be usable every week: 40-60 lines in a few minutes, not an hour. Two ways in,
+// because an operator's source varies:
+//
+//   PRE-FILLED GRID — the slate's players, richest projection first, each with
+//   an empty box per stat. No name is ever typed, so no name can be mistyped.
+//
+//   PASTE — a block off a board, parsed server-side and shown as matched and
+//   unmatched BEFORE anything is written. The preview is the safeguard: a
+//   misparsed name becomes a line against the wrong player, which is one
+//   selector run from a pick against the wrong player.
+//
+// Both funnel into the same commit, which re-validates server-side regardless.
+
+/** How many pre-filled rows to show before "show more". The slate is ~360
+ *  players; the first 60 by projected volume are the ones whose lines matter. */
+const PREFILL_STEP = 60
+
+function statLabel(stat: string) {
+  return stat.replace(/_/g, ' ').toUpperCase()
+}
+
+export function LineEntryPanel({ league, slate, error, onChanged }: {
+  league: string
+  slate: LineEntrySlate | null
+  error: string | null
+  onChanged: () => void | Promise<void>
+}) {
+  const [platform, setPlatform] = useState('underdog')
+  const [mode, setMode] = useState<'grid' | 'paste'>('grid')
+  const [shown, setShown] = useState(PREFILL_STEP)
+  const [filter, setFilter] = useState('')
+  // Keyed player_name_key::stat so a value survives filtering and paging.
+  const [draft, setDraft] = useState<Record<string, string>>({})
+  const [text, setText] = useState('')
+  const [preview, setPreview] = useState<LineEntryParse | null>(null)
+  const [busy, setBusy] = useState<'parse' | 'commit' | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+
+  if (error) {
+    return <p role="alert" style={{ padding: 'var(--pad)', margin: 0,
+                                    color: 'var(--alert)', fontSize: '13px' }}>{error}</p>
+  }
+  if (!slate) {
+    return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
+                       color: 'var(--steel)' }}>Loading the slate…</p>
+  }
+  if (slate.player_count === 0) {
+    return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
+                       color: 'var(--steel)' }}>
+      No upcoming {league} projections to enter lines against. Run the projector
+      first — lines attach to projected players.
+    </p>
+  }
+
+  const priceable = slate.stat_types.filter(
+    (s) => !slate.unpriceable_stat_types.includes(s))
+  const needle = filter.trim().toLowerCase()
+  const visible = slate.players
+    .filter((p) => !needle || p.player_name.toLowerCase().includes(needle)
+                   || (p.team ?? '').toLowerCase().includes(needle))
+    .slice(0, shown)
+
+  /** Grid entries that actually have a value. Empty boxes are not rows. */
+  function gridRows() {
+    const rows: { player_name: string; stat_type: string; line: number }[] = []
+    for (const [key, raw] of Object.entries(draft)) {
+      const value = Number(raw)
+      if (!raw.trim() || !Number.isFinite(value)) continue
+      const [nameKey, stat] = key.split('::')
+      const player = slate!.players.find((p) => p.player_name_key === nameKey)
+      if (player) {
+        rows.push({ player_name: player.player_name, stat_type: stat,
+                    line: value })
+      }
+    }
+    return rows
+  }
+
+  async function parse() {
+    setBusy('parse'); setFailure(null); setMessage(null)
+    const res = await fetch('/api/operator/line-entry/parse', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ league, text }),
+    })
+    const body = await res.json().catch(() => null)
+    setBusy(null)
+    if (!res.ok) {
+      setFailure(typeof body?.detail === 'string' ? body.detail
+                 : `Parse failed (${res.status})`)
+      return
+    }
+    setPreview(body as LineEntryParse)
+  }
+
+  async function commit(rows: { player_name: string; stat_type: string; line: number }[]) {
+    if (rows.length === 0) { setFailure('Nothing to write.'); return }
+    setBusy('commit'); setFailure(null); setMessage(null)
+    const res = await fetch('/api/operator/line-entry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ league, platform, rows }),
+    })
+    const body = await res.json().catch(() => null)
+    setBusy(null)
+    if (!res.ok) {
+      setFailure(typeof body?.detail === 'string' ? body.detail
+                 : `Write failed (${res.status})`)
+      return
+    }
+    const result = body as LineEntryResult
+    setMessage(`${result.written} line${result.written === 1 ? '' : 's'} `
+               + `written as ${result.line_source}.`)
+    setPreview(null); setText(''); setDraft({})
+    await onChanged()
+  }
+
+  const pending = gridRows().length
+
+  return (
+    <div style={{ padding: 'var(--pad)', display: 'grid', gap: '10px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap',
+                    alignItems: 'center' }}>
+        <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+          BOOK <select value={platform} aria-label="Platform" style={dateInput}
+            onChange={(e) => setPlatform(e.target.value)}>
+            {slate.platforms.map((p) => (
+              <option key={p} value={p}>{p.toUpperCase()}</option>))}
+          </select>
+        </label>
+        <button type="button" style={{ ...btn, color: mode === 'grid'
+          ? 'var(--lime)' : 'var(--blue)' }} aria-pressed={mode === 'grid'}
+          onClick={() => setMode('grid')}>GRID</button>
+        <button type="button" style={{ ...btn, color: mode === 'paste'
+          ? 'var(--lime)' : 'var(--blue)' }} aria-pressed={mode === 'paste'}
+          onClick={() => setMode('paste')}>PASTE</button>
+        <span style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+          {slate.player_count} players · {slate.game_dates.join(', ')}
+        </span>
+      </div>
+
+      {slate.unpriceable_stat_types.length > 0 && (
+        <p style={{ ...mono, fontSize: '10px', color: 'var(--amber)', margin: 0 }}>
+          {slate.unpriceable_stat_types.map(statLabel).join(', ')} stores but
+          never prices — no projection column.
+        </p>
+      )}
+
+      {mode === 'grid' ? (
+        <>
+          <input value={filter} onChange={(e) => setFilter(e.target.value)}
+            placeholder="filter by player or team" aria-label="Filter players"
+            style={{ ...dateInput, marginLeft: 0 }} />
+          <div style={{ maxHeight: '420px', overflow: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={th}>Player</th>
+                {priceable.map((s) => (
+                  <th key={s} style={{ ...th, textAlign: 'right' }}>
+                    {statLabel(s)}</th>))}
+              </tr></thead>
+              <tbody>
+                {visible.map((p) => (
+                  <tr key={`${p.player_name_key}-${p.game_date}`}>
+                    <td style={td}>
+                      {p.player_name}
+                      <div style={{ ...mono, fontSize: '10px',
+                                    color: 'var(--steel)' }}>
+                        {p.team ?? '—'} · {p.game_date}
+                      </div>
+                    </td>
+                    {priceable.map((s) => {
+                      const key = `${p.player_name_key}::${s}`
+                      const proj = p.projections[s]
+                      const existing = p.existing_lines[s]
+                      return (
+                        <td key={s} style={{ ...td, textAlign: 'right' }}>
+                          <input type="number" step="0.5" inputMode="decimal"
+                            aria-label={`${p.player_name} ${s}`}
+                            value={draft[key] ?? ''}
+                            placeholder={existing != null ? String(existing) : ''}
+                            onChange={(e) => setDraft(
+                              { ...draft, [key]: e.target.value })}
+                            style={{ ...dateInput, marginLeft: 0, width: '78px',
+                                     textAlign: 'right' }} />
+                          <div style={{ ...mono, fontSize: '10px',
+                                        color: existing != null
+                                          ? 'var(--amber)' : 'var(--steel)' }}>
+                            {proj != null ? `proj ${Number(proj).toFixed(1)}` : '—'}
+                            {existing != null && ' · has line'}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {shown < slate.players.length && (
+              <button type="button" style={btn}
+                onClick={() => setShown(shown + PREFILL_STEP)}>
+                SHOW {Math.min(PREFILL_STEP, slate.players.length - shown)} MORE
+              </button>
+            )}
+            <button type="button" style={btn} disabled={busy !== null || !pending}
+              onClick={() => commit(gridRows())}>
+              {busy === 'commit' ? 'WRITING…' : `WRITE ${pending} LINE${pending === 1 ? '' : 'S'}`}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <textarea value={text} onChange={(e) => setText(e.target.value)}
+            aria-label="Pasted lines" rows={10}
+            placeholder={'One per line. Tab, comma, pipe or two spaces:\n'
+                         + "Ja'Marr Chase, Receiving Yards, 74.5\n"
+                         + 'DJ Moore\treceptions\t4.5'}
+            style={{ ...mono, fontSize: '12px', padding: '8px',
+                     background: 'var(--navy-raised)',
+                     color: 'var(--steel-bright)',
+                     border: '1px solid var(--steel-line)', borderRadius: '3px' }} />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" style={btn} disabled={busy !== null || !text.trim()}
+              onClick={parse}>
+              {busy === 'parse' ? 'CHECKING…' : 'CHECK'}
+            </button>
+            {preview && preview.matched_count > 0 && (
+              <button type="button" style={btn} disabled={busy !== null}
+                onClick={() => commit(preview.matched.map((m) => ({
+                  player_name: m.player_name, stat_type: m.stat_type,
+                  line: m.line })))}>
+                {busy === 'commit' ? 'WRITING…'
+                  : `WRITE ${preview.matched_count} MATCHED`}
+              </button>
+            )}
+          </div>
+
+          {preview && (
+            <div style={{ display: 'grid', gap: '8px' }}>
+              <p style={{ ...mono, fontSize: '11px', margin: 0,
+                          color: preview.unmatched_count
+                            ? 'var(--amber)' : 'var(--lime)' }}>
+                {preview.matched_count} matched · {preview.unmatched_count} not
+              </p>
+              {preview.unmatched_count > 0 && (
+                /* Shown FIRST and in full. A rejected row the operator does not
+                   notice is a line they believe they entered. */
+                <div style={{ border: '1px solid var(--alert)', padding: '8px' }}>
+                  <div style={{ ...mono, fontSize: '10px', color: 'var(--alert)',
+                                letterSpacing: '0.1em', marginBottom: '4px' }}>
+                    NOT WRITTEN
+                  </div>
+                  {preview.unmatched.map((u) => (
+                    <div key={u.line_number} style={{ fontSize: '12px' }}>
+                      <span style={mono}>L{u.line_number}</span> {u.raw}
+                      <div style={{ fontSize: '11px', color: 'var(--alert)' }}>
+                        {u.problems.join('; ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {preview.matched_count > 0 && (
+                <div style={{ maxHeight: '260px', overflow: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr>
+                      {['Player', 'Stat', 'Line', 'Proj', ''].map((h, i) => (
+                        <th key={h || i} style={{ ...th,
+                          textAlign: i === 2 || i === 3 ? 'right' : 'left' }}>
+                          {h}</th>))}
+                    </tr></thead>
+                    <tbody>
+                      {preview.matched.map((m) => (
+                        <tr key={m.line_number}>
+                          <td style={td}>{m.player_name}
+                            <div style={{ ...mono, fontSize: '10px',
+                                          color: 'var(--steel)' }}>
+                              {m.team ?? '—'} · {m.game_date}</div>
+                          </td>
+                          <td style={{ ...td, ...mono, fontSize: '11px' }}>
+                            {m.stat_type}</td>
+                          <td style={{ ...td, ...num }}>{m.line}</td>
+                          <td style={{ ...td, ...num, color: 'var(--steel)' }}>
+                            {m.our_projection != null
+                              ? Number(m.our_projection).toFixed(1) : '—'}</td>
+                          <td style={{ ...td, ...mono, fontSize: '10px',
+                                       color: 'var(--amber)' }}>
+                            {m.replaces_existing ? 'REPLACES' : ''}
+                            {m.warnings.length > 0 ? ' NO EDGE' : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {failure && <p role="alert" style={{ margin: 0, fontSize: '12px',
+                                           color: 'var(--alert)' }}>{failure}</p>}
+      {message && <p style={{ margin: 0, fontSize: '12px',
+                              color: 'var(--lime)' }}>{message}</p>}
+    </div>
   )
 }

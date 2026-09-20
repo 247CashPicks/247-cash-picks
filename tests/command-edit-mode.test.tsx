@@ -74,6 +74,11 @@ function renderPage(selectedConfigId: string | null,
                             week: null },
                   counts: {}, total: 0, pending: 0, selections: [] })}
       health={ok({ agents: [] } as Record<string, unknown>)}
+      lineSlate={ok({
+        league: 'NFL', from_date: '2026-09-20', game_dates: ['2026-09-20'],
+        stat_types: ['rec_yds'], unpriceable_stat_types: [],
+        platforms: ['underdog', 'prizepicks'], player_count: 0, players: [],
+      })}
     />,
   )
 }
