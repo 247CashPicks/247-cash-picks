@@ -1168,7 +1168,10 @@ export function LineEntryPanel({ league, slate, error, onChanged }: {
   error: string | null
   onChanged: () => void | Promise<void>
 }) {
-  const [platform, setPlatform] = useState('underdog')
+  // Empty until the slate says which books exist. Hardcoding one would put a
+  // platform name in this file that the API already owns — and the copy guard
+  // is right that a book's name has no business being a literal in UI copy.
+  const [platform, setPlatform] = useState('')
   const [mode, setMode] = useState<'grid' | 'paste'>('grid')
   const [shown, setShown] = useState(PREFILL_STEP)
   const [filter, setFilter] = useState('')
@@ -1198,6 +1201,7 @@ export function LineEntryPanel({ league, slate, error, onChanged }: {
 
   const priceable = slate.stat_types.filter(
     (s) => !slate.unpriceable_stat_types.includes(s))
+  const book = platform || slate.platforms[0] || ''
   const needle = filter.trim().toLowerCase()
   const visible = slate.players
     .filter((p) => !needle || p.player_name.toLowerCase().includes(needle)
@@ -1241,7 +1245,7 @@ export function LineEntryPanel({ league, slate, error, onChanged }: {
     setBusy('commit'); setFailure(null); setMessage(null)
     const res = await fetch('/api/operator/line-entry', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ league, platform, rows }),
+      body: JSON.stringify({ league, platform: book, rows }),
     })
     const body = await res.json().catch(() => null)
     setBusy(null)
@@ -1264,7 +1268,7 @@ export function LineEntryPanel({ league, slate, error, onChanged }: {
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap',
                     alignItems: 'center' }}>
         <label style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
-          BOOK <select value={platform} aria-label="Platform" style={dateInput}
+          BOOK <select value={book} aria-label="Platform" style={dateInput}
             onChange={(e) => setPlatform(e.target.value)}>
             {slate.platforms.map((p) => (
               <option key={p} value={p}>{p.toUpperCase()}</option>))}
