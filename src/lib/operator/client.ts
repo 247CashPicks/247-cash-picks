@@ -13,7 +13,12 @@ import { auth } from '@clerk/nextjs/server'
  * /agents/* route including the ones that publish.
  */
 
-export const BACKEND_URL = process.env.BACKEND_URL || ''
+// The linked 247 Sports Intel Vercel project names this server-only setting
+// DATANEXUS_BACKEND_URL.  Keep BACKEND_URL as the legacy/local alias so the
+// operator surface can run in either deployment without copying a secret.
+export const BACKEND_URL = process.env.DATANEXUS_BACKEND_URL
+  || process.env.BACKEND_URL
+  || ''
 
 /** Paths this app will proxy. A catch-all that forwarded anything would let a
  *  signed-in subscriber reach routes the operator API does not own. */
