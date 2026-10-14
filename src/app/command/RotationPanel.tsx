@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   NbaRotation, NbaRotationAuditEvent, NbaRotationListResponse,
   NbaRotationMatchup, NbaRotationPlayer, NbaRotationProvenance,
+  NbaPaceIndicatorValue,
   NbaPaceDriverEvidence,
 } from '@/lib/operator/client'
 
@@ -349,6 +350,12 @@ export default function RotationPanel() {
       Preseason projected-unit pace heuristic; not an exact possession pace claim.
       Ten unique players are required. Missing PACE or provenance fails closed.
     </p>
+    <p style={{ margin: 0, color: 'var(--steel)', fontSize: '11px' }}>
+      Matchup pace effect is opponent-facing: starters use opposing starters and
+      bench uses opposing bench. PACE UP (+) is favorable, PACE DOWN (-) is
+      unfavorable, and NEUTRAL (=) is within ±0.05 percentage points. Text and
+      signs carry the meaning in addition to color.
+    </p>
     <div style={{ display: 'flex', gap: '8px' }}>
       <button type="button" style={button} onClick={() => setSort('team')}>SORT TEAM</button>
       <button type="button" style={button} onClick={() => setSort('starters')}>SORT STARTERS</button>
@@ -364,6 +371,10 @@ export default function RotationPanel() {
         <h1>247 Sports Intel · NBA Projected Unit Pace</h1>
         <p>2026-27 preseason projection using final 2025-26 verified player baselines.
           Starters (slots 1-5) and bench (slots 6-10) remain separate arithmetic means.</p>
+        <p>Legend: PACE UP (+) = favorable; PACE DOWN (-) = unfavorable;
+          NEUTRAL (=) = absolute effect below 0.05 percentage points; PACE UNKNOWN (?)
+          = missing unit or verified denominator. Matchup effect always uses the
+          opposing corresponding unit; own unit pace is supporting evidence.</p>
       </div>
       <UnitPaceReport rotations={ordered} />
       <RotationPrintDetail rotation={selected} matchup={matchup} />
@@ -466,12 +477,14 @@ function RotationPrintDetail({ rotation, matchup }: {
     <p>
       Status: {evaluation.ready ? 'verified' : 'incomplete'} · Starter pace:{' '}
       {evaluation.starters.average_pace ?? 'unknown'} · Bench pace:{' '}
-      {evaluation.bench.average_pace ?? 'unknown'} · Weighting: {evaluation.weighting_mode}
+      {evaluation.bench.average_pace ?? 'unknown'} · Own starters:{' '}
+      {evaluation.starters.own_unit_pace.text} · Own bench:{' '}
+      {evaluation.bench.own_unit_pace.text} · Weighting: {evaluation.weighting_mode}
     </p>
     <p>
       Matchup: {!matchup ? 'not selected'
         : !matchup.comparison.ready ? `incomplete · ${matchup.comparison.errors.join(' · ')}`
-        : `starters ${matchup.comparison.starters?.label} ${matchup.comparison.starters?.delta}; bench ${matchup.comparison.bench?.label} ${matchup.comparison.bench?.delta}`}
+        : `starter effect ${matchup.comparison.starters?.matchup_pace_effect.text}; bench effect ${matchup.comparison.bench?.matchup_pace_effect.text}`}
       {' '}· Influence adjustment: OFF · {evaluation.influence_adjustment.reason}
     </p>
     {evaluation.errors.length > 0 && <p>Unknown / incomplete: {evaluation.errors.join(' · ')}</p>}
@@ -526,14 +539,18 @@ function UnitPaceReport({ rotations }: { rotations: NbaRotation[] }) {
       </div>)}
     </div>}
     <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}>
-      <thead><tr>{['TEAM', 'STARTERS 1-5', 'BENCH 6-10', 'VS LEAGUE',
+      <thead><tr>{['TEAM', 'STARTERS 1-5', 'STARTER OWN UNIT PACE',
+        'BENCH 6-10', 'BENCH OWN UNIT PACE',
         'COMPLETENESS / CONFIDENCE'].map((label) => <th key={label}
         style={{ ...mono, fontSize: '10px', textAlign: 'left', padding: '5px' }}>{label}</th>)}</tr></thead>
       <tbody>{rotations.map((rotation) => <tr key={rotation.id}>
         <td style={{ padding: '5px' }}>{rotation.team}</td>
         <td>{rotation.evaluation.starters.average_pace ?? 'unknown'}</td>
+        <td><PaceIndicatorBadge value={rotation.evaluation.starters.own_unit_pace}
+          compact /></td>
         <td>{rotation.evaluation.bench.average_pace ?? 'unknown'}</td>
-        <td>S {rotation.evaluation.starters.vs_league_delta ?? '—'} · B {rotation.evaluation.bench.vs_league_delta ?? '—'}</td>
+        <td><PaceIndicatorBadge value={rotation.evaluation.bench.own_unit_pace}
+          compact /></td>
         <td style={{ color: rotation.evaluation.ready ? 'var(--lime)' : 'var(--alert)' }}>
           {rotation.evaluation.ready ? '10 unique verified players' : rotation.evaluation.errors.join(' · ')}</td>
       </tr>)}</tbody>
@@ -636,18 +653,26 @@ function UnitSummary({ rotation, matchup }: { rotation: NbaRotation; matchup: Nb
       <div style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
         {unit.unit.toUpperCase()} UNIT PACE</div>
       <strong style={{ ...mono, fontSize: '20px' }}>{unit.average_pace ?? 'NOT READY'}</strong>
-      <div style={{ fontSize: '11px', color: unit.ready ? 'var(--lime)' : 'var(--alert)' }}>
-        {unit.ready ? `${unit.label_vs_league} ${unit.vs_league_delta! >= 0 ? '+' : ''}${unit.vs_league_delta} vs 100.2 league`
-          : unit.errors.join(' · ')}</div>
+      <div style={{ fontSize: '10px', color: 'var(--steel)', marginTop: '4px' }}>
+        Own unit pace (supporting)</div>
+      {unit.ready ? <PaceIndicatorBadge value={unit.own_unit_pace} compact />
+        : <div style={{ fontSize: '11px', color: 'var(--alert)' }}>
+          {unit.errors.join(' · ')}</div>}
     </div>)}
     <div style={{ background: 'var(--navy-raised)', padding: '10px' }}>
       <div style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>MATCHUP</div>
       {!matchup ? <span style={{ color: 'var(--steel)' }}>Enter opponent and compare.</span>
         : !matchup.comparison.ready ? <span style={{ color: 'var(--alert)' }}>
           {matchup.comparison.errors.join(' · ')}</span>
-        : <div style={{ fontSize: '11px' }}>
-          starters: {matchup.comparison.starters?.label} {matchup.comparison.starters?.delta}<br />
-          bench: {matchup.comparison.bench?.label} {matchup.comparison.bench?.delta}
+        : <div style={{ display: 'grid', gap: '8px', marginTop: '5px' }}>
+          <div><span style={{ ...mono, fontSize: '10px' }}>STARTER MATCHUP PACE EFFECT</span><br />
+            <PaceIndicatorBadge value={matchup.comparison.starters!.matchup_pace_effect} />
+            <RawPaceSupport values={matchup.comparison.starters!.supporting_raw_values} />
+          </div>
+          <div><span style={{ ...mono, fontSize: '10px' }}>BENCH MATCHUP PACE EFFECT</span><br />
+            <PaceIndicatorBadge value={matchup.comparison.bench!.matchup_pace_effect} />
+            <RawPaceSupport values={matchup.comparison.bench!.supporting_raw_values} />
+          </div>
         </div>}
     </div>
     <div style={{ background: 'var(--navy-raised)', padding: '10px' }}>
@@ -659,5 +684,35 @@ function UnitSummary({ rotation, matchup }: { rotation: NbaRotation; matchup: Nb
         </div>)}
       <div style={{ color: 'var(--steel)', fontSize: '10px' }}>Influence adjustment OFF.</div>
     </div>
+  </div>
+}
+
+function PaceIndicatorBadge({ value, compact = false }: {
+  value: NbaPaceIndicatorValue; compact?: boolean
+}) {
+  const color = value.status === 'pace_up' ? 'var(--lime)'
+    : value.status === 'pace_down' ? 'var(--alert)'
+    : value.status === 'neutral' ? 'var(--steel-bright)' : 'var(--amber)'
+  return <span aria-label={value.screen_reader_label} title={value.screen_reader_label}
+    style={{ ...mono, display: 'inline-block', color,
+      fontSize: compact ? '10px' : '13px', fontWeight: 700,
+      border: `1px solid ${color}`, borderRadius: '3px',
+      padding: compact ? '2px 4px' : '4px 6px', marginTop: '3px' }}>
+    {value.symbol} {value.text}
+  </span>
+}
+
+function RawPaceSupport({ values }: {
+  values: {
+    team_unit_projected_pace: number
+    opponent_unit_projected_pace: number
+    verified_league_average_pace: number
+    team_minus_opponent_pace: number
+  }
+}) {
+  return <div style={{ color: 'var(--steel)', fontSize: '9px', marginTop: '3px' }}>
+    own {values.team_unit_projected_pace} · opponent{' '}
+    {values.opponent_unit_projected_pace} · league{' '}
+    {values.verified_league_average_pace}
   </div>
 }

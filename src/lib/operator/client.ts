@@ -125,9 +125,9 @@ export interface Indicator {
   description: string
   category: 'projection_factor' | 'confidence' | 'selection' | 'guard' | 'diagnostic'
   league: string
-  value_type: 'boolean' | 'numeric'
-  value: boolean | number
-  default_value: boolean | number
+  value_type: 'boolean' | 'numeric' | 'computed_numeric'
+  value: boolean | number | null
+  default_value: boolean | number | null
   min_value: number | null
   max_value: number | null
   bounds_source: string | null
@@ -137,6 +137,17 @@ export interface Indicator {
   backtest_effect: Record<string, { mae_delta?: number; delta?: number; ci?: [number, number] }> | null
   backtest_report_path: string | null
   source_file: string
+  runtime_only?: boolean
+  formula?: string | null
+  formula_version?: string | null
+  polarity?: { positive: string; negative: string } | null
+  thresholds?: Record<string, number | string> | null
+  unit?: string | null
+  status?: string | null
+  confidence?: string | null
+  provenance?: Record<string, unknown> | null
+  freshness?: Record<string, unknown> | null
+  applicability?: Array<{ unit: string; comparison: string }>
 }
 
 export interface IndicatorsResponse {
@@ -505,8 +516,59 @@ export interface NbaUnitPace {
   errors: string[]
   average_pace: number | null
   league_average_pace: number
+  league_average_pace_context: NbaLeagueAveragePaceContext
   vs_league_delta: number | null
   label_vs_league: 'pace-up' | 'pace-down' | 'neutral' | null
+  own_unit_pace: NbaPaceIndicatorValue
+}
+
+export interface NbaLeagueAveragePaceContext {
+  value: number
+  raw_value: number
+  unit: 'possessions_per_48_minutes'
+  season: '2025-26'
+  season_type: 'Regular Season'
+  definition: string
+  source_name: string
+  source_url: string
+  source_sha256: string
+  license: string
+  retrieved_at: string
+  teams: number
+  team_games: number
+  model_contract_precision: number
+}
+
+export interface NbaPaceIndicatorValue {
+  indicator_key: 'nba_opponent_pace_effect_pct'
+  name: 'Opponent Pace Effect'
+  formula_version: '1.0.0'
+  formula: string
+  unit: 'percent'
+  polarity: { positive: 'favorable'; negative: 'unfavorable' }
+  thresholds: {
+    pace_up_min_pct: number
+    pace_down_max_pct: number
+    neutral_absolute_lt_pct: number
+    display_decimal_places: 1
+    rounding_mode: 'ROUND_HALF_UP'
+  }
+  value: number | null
+  value_full_precision: string | null
+  display_value: number | null
+  status: 'pace_up' | 'pace_down' | 'neutral' | 'unknown'
+  symbol: '+' | '-' | '=' | '?'
+  text: string
+  screen_reader_label: string
+  confidence: 'low' | 'medium' | 'high' | 'unavailable'
+  provenance: Record<string, unknown>
+  freshness: Record<string, unknown>
+  applicability: {
+    league: 'NBA'; unit: 'starter' | 'bench'; comparison: string
+    role: 'own_unit' | 'matchup_pace_effect'; opponent_team: string | null
+    team?: string | null
+  }
+  league_average: NbaLeagueAveragePaceContext
 }
 
 export interface NbaRotationEvaluation {
@@ -565,8 +627,10 @@ export interface NbaRotationListResponse {
   league: 'NBA'
   season: '2026-27'
   league_average_pace: number
+  league_average_pace_context: NbaLeagueAveragePaceContext
   pace_season: '2025-26'
   pace_definition: string
+  indicator_definitions: Array<Record<string, unknown>>
   rotations: NbaRotation[]
 }
 
@@ -590,9 +654,25 @@ export interface NbaRotationMatchup {
   comparison: {
     ready: boolean
     errors: string[]
-    starters: { team_pace: number; opponent_pace: number; delta: number; label: string } | null
-    bench: { team_pace: number; opponent_pace: number; delta: number; label: string } | null
+    indicator_definition: Record<string, unknown>
+    starters: NbaRotationUnitMatchup | null
+    bench: NbaRotationUnitMatchup | null
     players: Array<{ slot: number; player_name: string; unit: string; comparison: unknown }>
+  }
+}
+
+export interface NbaRotationUnitMatchup {
+  team_pace: number
+  opponent_pace: number
+  delta: number
+  label: string
+  own_unit_pace: NbaPaceIndicatorValue
+  matchup_pace_effect: NbaPaceIndicatorValue
+  supporting_raw_values: {
+    team_unit_projected_pace: number
+    opponent_unit_projected_pace: number
+    verified_league_average_pace: number
+    team_minus_opponent_pace: number
   }
 }
 

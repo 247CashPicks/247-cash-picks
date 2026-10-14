@@ -191,11 +191,18 @@ export function IndicatorsPanel({ data, editing, onChanged }: {
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--steel)',
                                   marginTop: '2px' }}>{i.description}</div>
+                    {i.runtime_only && <div style={{ ...mono, marginTop: '4px',
+                      fontSize: '10px', color: 'var(--blue)' }}>
+                      {i.formula_version && `FORMULA ${i.formula_version} · `}
+                      {i.unit?.toUpperCase()} ·{' '}
+                      {(i.applicability ?? []).map((a) => a.comparison).join(' · ')}
+                    </div>}
                     <VerdictChip i={i} />
                   </td>
                   <td style={{ ...td, ...num, width: '14%' }}>
                     <span style={{ color: 'var(--steel-bright)' }}>
-                      {typeof i.value === 'boolean'
+                      {i.runtime_only ? 'COMPUTED PER MATCHUP'
+                        : typeof i.value === 'boolean'
                         ? (i.value ? 'ON' : 'OFF') : i.value}
                     </span>
                     {i.min_value !== null && (
@@ -231,6 +238,14 @@ function IndicatorControl({ i, editable, busy, onSet }: {
   onSet: (v: boolean | number) => void
 }) {
   const [draft, setDraft] = useState<string>(String(i.value))
+
+  if (i.runtime_only) {
+    return (
+      <span style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+        runtime observation — not configurable
+      </span>
+    )
+  }
 
   if (!i.toggleable) {
     return (
