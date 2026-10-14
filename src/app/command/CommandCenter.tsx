@@ -11,6 +11,7 @@ import {
   AuditDrawer, ComparePanel, ConfigsPanel, IndicatorsPanel, PromotePanel,
   RunHealthPanel, SlatePanel, LineRanksPanel, Panel,
 } from './panels'
+import ScenarioPanel from './ScenarioPanel'
 
 /**
  * One page, six panels, a league switcher, and an audit drawer.
@@ -166,6 +167,11 @@ export default function CommandCenter({
         {league === 'NFL' && (
           <Panel title="PFF line ranks" error={null}>
             <LineRanksPanel schedule={scheduleContext} onChanged={refresh} />
+          </Panel>
+        )}
+        {league === 'NBA' && (
+          <Panel title="Projection scenario sandbox" error={null}>
+            <ScenarioPanel />
           </Panel>
         )}
       </main>

@@ -330,3 +330,113 @@ export interface ExternalLineRanksResponse {
   rows_written: number
   audit_logged: boolean
 }
+
+export interface ProjectionScenarioPlayerOption {
+  player_name: string
+  team: string | null
+  opponent_team: string | null
+  position: string | null
+  projected_minutes: number | null
+  is_starter: boolean | null
+}
+
+export interface ProjectionScenarioGameOption {
+  id: string
+  game_date: string
+  tip_time: string | null
+  home_team: string | null
+  away_team: string | null
+  players: ProjectionScenarioPlayerOption[]
+}
+
+export interface ProjectionScenarioOptions {
+  league: 'NBA'
+  game_date: string
+  games: ProjectionScenarioGameOption[]
+}
+
+export interface ProjectionScenarioField {
+  key: string
+  label: string
+  type: 'number' | 'boolean'
+  category: string
+  minimum?: number
+  maximum?: number
+  nullable: boolean
+}
+
+export interface ProjectionScenarioTiming {
+  game_start: string
+  server_time: string
+  seconds_to_tip: number
+  minutes_to_tip: number
+  inside_final_30: boolean
+  game_started: boolean
+  urgency: 'pregame' | 'final_30_minutes' | 'started'
+}
+
+export interface ProjectionScenarioSource {
+  league: 'NBA'
+  game_id: string
+  game_date: string
+  tip_time: string
+  player_name: string
+  team: string | null
+  opponent_team: string | null
+  position: string | null
+  inputs: Record<string, unknown>
+  source_timestamps: Record<string, string | null>
+  indicator_config: {
+    id: string | null
+    name: string | null
+    source: string
+    snapshot_hash: string | null
+  }
+  official_projection: Record<string, unknown> | null
+}
+
+export interface ProjectionScenarioSourceResponse {
+  source: ProjectionScenarioSource
+  original_outputs: Record<string, number | null>
+  timing: ProjectionScenarioTiming
+  fields: ProjectionScenarioField[]
+  isolation: {
+    official_projection_mutated: false
+    published_projection_mutated: false
+  }
+}
+
+export interface ProjectionScenario {
+  id: string
+  league: 'NBA'
+  game_id: string
+  game_date: string
+  tip_time: string
+  player_name: string
+  team: string | null
+  status: 'draft' | 'finalized'
+  reason: string
+  source_snapshot: ProjectionScenarioSource
+  overrides: Record<string, unknown>
+  outputs: Record<string, number | null>
+  actor_user_id: string
+  actor_display_name: string
+  created_at?: string
+  updated_at?: string
+  finalized_at?: string | null
+  timing: ProjectionScenarioTiming
+  fields: ProjectionScenarioField[]
+}
+
+export interface ProjectionScenarioAuditEvent {
+  id: string | number
+  scenario_id: string
+  actor_user_id: string
+  actor_display_name: string
+  action: 'create' | 'update' | 'reset' | 'finalize'
+  field: string | null
+  old_value: unknown
+  new_value: unknown
+  reason: string
+  created_at: string
+}
