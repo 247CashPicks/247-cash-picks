@@ -12,6 +12,8 @@ import {
   RunHealthPanel, SlatePanel, LineRanksPanel, Panel,
 } from './panels'
 import ScenarioPanel from './ScenarioPanel'
+import RotationPanel from './RotationPanel'
+import UsageDifferentialPanel from './UsageDifferentialPanel'
 
 /**
  * One page, six panels, a league switcher, and an audit drawer.
@@ -170,9 +172,17 @@ export default function CommandCenter({
           </Panel>
         )}
         {league === 'NBA' && (
-          <Panel title="Projection scenario sandbox" error={null}>
-            <ScenarioPanel />
-          </Panel>
+          <>
+            <Panel title="Projected starter / bench unit pace" error={null}>
+              <RotationPanel />
+            </Panel>
+            <Panel title="Offseason usage-load differential" error={null}>
+              <UsageDifferentialPanel />
+            </Panel>
+            <Panel title="Projection scenario sandbox" error={null}>
+              <ScenarioPanel />
+            </Panel>
+          </>
         )}
       </main>
 

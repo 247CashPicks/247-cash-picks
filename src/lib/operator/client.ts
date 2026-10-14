@@ -445,3 +445,248 @@ export interface ProjectionScenarioAuditEvent {
   reason: string
   created_at: string
 }
+
+export interface NbaRotationProvenance {
+  source_name: string
+  source_url: string
+  license?: string
+  retrieved_at: string
+  season: '2025-26'
+  season_type: 'Regular Season'
+  per_mode?: string
+  definition: string
+  source_team?: string
+  destination_team?: string
+}
+
+export interface NbaPaceDriverEvidence {
+  verified: true
+  team_pace_on: number
+  team_pace_off: number
+  team_pace_delta: number
+  opponent_pace_on: number | null
+  opponent_pace_off: number | null
+  opponent_pace_delta: number | null
+  minutes_on: number
+  sample_games: number
+  confidence: 'low' | 'medium' | 'high'
+  provenance: NbaRotationProvenance
+  causality_note: string
+}
+
+export interface NbaRotationPlayer {
+  slot: number
+  player_id: string | null
+  player_name: string
+  pace: number | null
+  usage_pct: number | null
+  sample_games?: number | null
+  sample_minutes?: number | null
+  sample_confidence?: 'low' | 'medium' | 'high' | null
+  current_team?: string | null
+  roster_source_url?: string | null
+  roster_verified_at?: string | null
+  provisional_baseline?: true
+  pace_driver?: NbaPaceDriverEvidence | null
+  provenance: NbaRotationProvenance | null
+}
+
+export interface NbaEffectiveRotationSlot {
+  slot: number
+  unit: 'starter' | 'bench'
+  original: NbaRotationPlayer
+  override: NbaRotationPlayer | null
+  effective: NbaRotationPlayer
+}
+
+export interface NbaUnitPace {
+  unit: 'starter' | 'bench'
+  ready: boolean
+  errors: string[]
+  average_pace: number | null
+  league_average_pace: number
+  vs_league_delta: number | null
+  label_vs_league: 'pace-up' | 'pace-down' | 'neutral' | null
+}
+
+export interface NbaRotationEvaluation {
+  ready: boolean
+  heuristic_label: string
+  baseline_label: string
+  errors: string[]
+  slots: NbaEffectiveRotationSlot[]
+  starters: NbaUnitPace
+  bench: NbaUnitPace
+  blended: { pace: number; weights: { starter: number; bench: number } } | null
+  blend_note: string | null
+  weighting_mode: 'arithmetic'
+  usage_note: string
+  pace_drivers: Array<{
+    slot: number
+    player_id: string | null
+    player_name: string
+    usage_pct: number | null
+    status: 'verified' | 'not verified'
+    evidence: NbaPaceDriverEvidence | null
+    descriptive_only: true
+  }>
+  pace_driver_rankings: Array<{
+    slot: number
+    player_id: string | null
+    player_name: string
+    team_pace_delta: number
+    direction: 'increaser' | 'decreaser' | 'neutral'
+    magnitude: number
+    minutes_on: number
+    sample_games: number
+    confidence: 'low' | 'medium' | 'high'
+  }>
+  influence_adjustment: { enabled: false; mode: 'off'; reason: string }
+}
+
+export interface NbaRotation {
+  id: string
+  league: 'NBA'
+  season: '2026-27'
+  team: string
+  status: 'draft'
+  source_slots: NbaRotationPlayer[]
+  slot_overrides: Record<string, NbaRotationPlayer>
+  blend_weights: { starter: number; bench: number } | null
+  reason: string
+  actor_user_id: string
+  actor_display_name: string
+  created_at?: string
+  updated_at?: string
+  evaluation: NbaRotationEvaluation
+}
+
+export interface NbaRotationListResponse {
+  league: 'NBA'
+  season: '2026-27'
+  league_average_pace: number
+  pace_season: '2025-26'
+  pace_definition: string
+  rotations: NbaRotation[]
+}
+
+export interface NbaRotationAuditEvent {
+  id: string | number
+  rotation_id: string
+  actor_user_id: string
+  actor_display_name: string
+  action: 'create' | 'update' | 'reset'
+  field: string
+  old_value: unknown
+  new_value: unknown
+  reason: string
+  created_at: string
+}
+
+export interface NbaRotationMatchup {
+  season: string
+  team: NbaRotation
+  opponent: NbaRotation
+  comparison: {
+    ready: boolean
+    errors: string[]
+    starters: { team_pace: number; opponent_pace: number; delta: number; label: string } | null
+    bench: { team_pace: number; opponent_pace: number; delta: number; label: string } | null
+    players: Array<{ slot: number; player_name: string; unit: string; comparison: unknown }>
+  }
+}
+
+export interface NbaUsagePlayer {
+  player_id: string
+  player_name: string
+  prior_team: string | null
+  current_team: string | null
+  has_prior_nba_sample: boolean
+  usg_pct: number | null
+  possessions: number | null
+  minutes: number | null
+  games: number | null
+  confidence: string | null
+  position: string | null
+  active: boolean
+  depth_slot: number | null
+  projected_minutes: number | null
+  projected_role: 'starter' | 'bench' | 'out_of_rotation' | null
+  prior_role: 'starter' | 'bench' | null
+  prior_primary_handler: boolean | null
+  projected_primary_handler: boolean | null
+  usage_adjustment_pct: number
+  usage_adjustment_reason: string | null
+  lineup_overlap: string | null
+  primary_handler_context: string | null
+  roster_source_url: string | null
+  roster_verified_at: string | null
+  provenance: NbaRotationProvenance | null
+}
+
+export interface NbaUsageContributor {
+  player_id: string
+  original: NbaUsagePlayer
+  override: NbaUsagePlayer | null
+  effective: NbaUsagePlayer
+  classification: 'incoming' | 'outgoing' | 'returning'
+  exposure_basis: 'possessions' | 'minutes' | null
+  usage_load_per_1000: number | null
+}
+
+export interface NbaUsageAnalysisResult {
+  team: string
+  ready: boolean
+  errors: string[]
+  method: string
+  exposure_basis: 'possessions' | 'minutes' | null
+  outgoing_load: number | null
+  incoming_load: number | null
+  net_load: number | null
+  depth_chart_ready: boolean
+  depth_chart_errors: string[]
+  active_incoming_load: number | null
+  active_outgoing_load: number | null
+  active_net_load: number | null
+  active_method: string
+  active_depth_slots: Array<{ slot: number; unit: 'starter' | 'bench'; player_name: string }>
+  contributors: NbaUsageContributor[]
+  unknown_newcomers: Array<{ player_id: string; player_name: string; reason: string }>
+  returning_opportunities: Array<Record<string, unknown>>
+  role_adjustments: {
+    ready: boolean
+    errors: string[]
+    method: string
+    players: Array<{
+      player_id: string; player_name: string; original_usg_pct: number | null
+      operator_adjustment_pct: number; effective_usg_pct: number | null
+      prior_role: string; current_role: string
+      prior_primary_handler: boolean | null
+      projected_primary_handler: boolean | null
+      hypothesis: string; projected_minutes: number | null
+      lineup_overlap: string | null; primary_handler_context: string | null
+      confidence: string; reason: string | null
+      defaulted_to_no_change: boolean; label: string
+    }>
+  }
+}
+
+export interface NbaUsageDifferential {
+  id: string
+  league: 'NBA'
+  season: '2026-27'
+  team: string
+  status: 'draft'
+  source_players: NbaUsagePlayer[]
+  player_overrides: Record<string, NbaUsagePlayer>
+  reason: string
+  actor_user_id: string
+  actor_display_name: string
+  analysis: NbaUsageAnalysisResult
+}
+
+export interface NbaUsageListResponse {
+  league: 'NBA'
+  season: '2026-27'
+  analyses: NbaUsageDifferential[]
+}
