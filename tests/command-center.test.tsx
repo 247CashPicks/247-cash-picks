@@ -110,6 +110,30 @@ describe('contradiction marker', () => {
 })
 
 describe('guards and fixed numerics', () => {
+  it('renders Opponent Pace Effect as a first-class immutable runtime indicator', () => {
+    render(<IndicatorsPanel
+      data={response([indicator({
+        key: 'nba_opponent_pace_effect_pct',
+        display_name: 'Opponent Pace Effect',
+        description: 'Opponent corresponding unit pace versus league average.',
+        category: 'diagnostic', league: 'NBA',
+        value_type: 'computed_numeric', value: null, default_value: null,
+        min_value: -100, max_value: 100, bounds_source: 'physical',
+        toggleable: false, runtime_only: true,
+        formula_version: '1.0.0', unit: 'percent',
+        applicability: [
+          { unit: 'starter', comparison: 'starter_vs_starter' },
+          { unit: 'bench', comparison: 'bench_vs_bench' },
+        ], backtest_verdict: null, backtest_effect: null,
+      })])}
+      editing={null} onChanged={() => {}} />)
+    expect(screen.getByText('Opponent Pace Effect')).toBeTruthy()
+    expect(screen.getByText('COMPUTED PER MATCHUP')).toBeTruthy()
+    expect(screen.getByText('runtime observation — not configurable')).toBeTruthy()
+    expect(screen.getByText(/FORMULA 1.0.0 · PERCENT/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'SET' })).toBeNull()
+  })
+
   it('renders a guard as locked with the reason', () => {
     render(<IndicatorsPanel
       data={response([indicator({ key: 'implausible_edge_pct',
