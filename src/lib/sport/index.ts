@@ -101,7 +101,7 @@ export const SPORT_CONFIG: Record<Sport, SportConfig> = {
     label: 'NBA',
     fullName: 'Basketball',
     playersReference: 'nba_players_reference',
-    baselineSeason: '2024-25',
+    baselineSeason: '2025-26',
     playerRankColumn: 'per36_pts',
     hasMinutes: true,
     hiddenTools: [],
@@ -118,7 +118,7 @@ export const SPORT_CONFIG: Record<Sport, SportConfig> = {
     // matchups are basketball concepts. Gated here rather than ported.
     //
     // projection_runner is here for a different reason: lib/picks/model.ts is
-    // a basketball engine to the constant (pace 99.3, def rating 115.5,
+    // a basketball engine to the constant (pace 100.2, def rating 114.7,
     // rebound suppression), and the NFL engine lives BACKEND-side in
     // engine/projection_nfl.py. Running the NBA formula over NFL inputs would
     // not fail — it would return a confident, meaningless number, which is

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { BRAND } from '@/config/brand'
+import { SPORT_CONFIG } from '@/lib/sport'
 
 const C = BRAND.colors
 const F = BRAND.fonts
@@ -593,7 +594,7 @@ export default function LineupAdjusterPage() {
                         ))}
                       </div>
                       <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.muted, letterSpacing: '0.04em' }}>
-                        {liveCombo.tier}-man combo · {liveCombo.games_shared} shared games · {liveCombo.minutes} min · 2024-25 baseline
+                        {liveCombo.tier}-man combo · {liveCombo.games_shared} shared games · {liveCombo.minutes} min · {SPORT_CONFIG.NBA.baselineSeason} baseline
                       </div>
                       <a
                         href={`/tools/projection-runner?player=${encodeURIComponent(liveCombo.player)}&team=${encodeURIComponent(selection[0].team)}`}
@@ -605,7 +606,7 @@ export default function LineupAdjusterPage() {
                   )}
                   {!computing && liveCombo && !liveCombo.found && (
                     <div style={{ fontFamily: F.mono, fontSize: '12px', color: C.flagAmber, letterSpacing: '0.02em' }}>
-                      // no_qualifying_combo ({liveCombo.reason}) — under 20 shared games in 2024-25; engine uses base per-36
+                      // no_qualifying_combo ({liveCombo.reason}) — under 20 shared games in {SPORT_CONFIG.NBA.baselineSeason}; engine uses base per-36
                     </div>
                   )}
                 </div>
