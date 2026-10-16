@@ -90,8 +90,8 @@ export default function LandingPage() {
         {/* Wordmark */}
         <div style={{ fontFamily: F.mono, fontSize: '13px', fontWeight: 500, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
           <span className="cursor-blink" style={{ color: C.signalCyan, marginRight: '2px' }}>▌</span>
-          <span style={{ color: C.platinum }}>THE_ANALYTICS_</span>
-          <span style={{ color: C.signalCyan }}>COMMUNITY</span>
+          <span style={{ color: C.platinum }}>247_SPORTS_</span>
+          <span style={{ color: C.signalCyan }}>INTEL</span>
         </div>
 
         {/* Nav links */}
@@ -706,8 +706,8 @@ export default function LandingPage() {
                 fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
                 letterSpacing: '0.04em', marginBottom: '8px',
               }}>
-                <span style={{ color: C.platinum }}>▌ THE_ANALYTICS_</span>
-                <span style={{ color: C.signalCyan }}>COMMUNITY</span>
+                <span style={{ color: C.platinum }}>▌ 247_SPORTS_</span>
+                <span style={{ color: C.signalCyan }}>INTEL</span>
               </div>
               <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
                 {BRAND.domain}

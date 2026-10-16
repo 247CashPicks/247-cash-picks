@@ -14,10 +14,13 @@ describe('247 Sports Intel identity', () => {
     const shell = [
       'src/config/brand.ts',
       'src/app/page.tsx',
+      'src/app/join/page.tsx',
       'src/app/layout.tsx',
       'src/components/nav/SiteNav.tsx',
     ].map((path) => readFileSync(path, 'utf8')).join('\n')
 
     expect(shell).not.toContain('The Analytics Community')
+    expect(shell).not.toContain('THE_ANALYTICS')
+    expect(shell).not.toContain('ANALYTICS_COMMUNITY')
   })
 })
