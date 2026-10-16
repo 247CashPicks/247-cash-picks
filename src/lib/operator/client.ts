@@ -170,6 +170,109 @@ export interface IndicatorsResponse {
   }[]
 }
 
+export interface NbaFatigueSample {
+  opportunities: number
+  appearances: number
+  dnp_or_inactive: number
+  total_minutes: number
+  mean_minutes: number | null
+  minutes_variance: number | null
+}
+
+export interface NbaFatigueDelta {
+  conditioned_mean: number | null
+  baseline_mean: number | null
+  conditioned_variance: number | null
+  baseline_variance: number | null
+  raw_delta: number | null
+  raw_percent_delta: number | null
+  shrink_factor: number
+  shrunk_delta: number | null
+  shrunk_percent_delta: number | null
+  standard_error?: number | null
+  signal_to_noise_abs?: number | null
+}
+
+export interface NbaFatigueComparison {
+  status: 'Ready' | 'Unknown'
+  confidence: 'low' | 'medium' | 'high' | 'unknown'
+  insufficient_reasons: string[]
+  conditioned_sample: NbaFatigueSample
+  baseline_sample: NbaFatigueSample
+  minutes: NbaFatigueDelta
+  metrics: Record<string, {
+    per_game: NbaFatigueDelta
+    per_minute: NbaFatigueDelta
+  }>
+}
+
+export interface NbaFatigueCondition {
+  overall: NbaFatigueComparison
+  by_season: Array<{ season: string } & NbaFatigueComparison>
+  recent_season_weighted: {
+    status: 'Ready' | 'Unknown'
+    season_weights: Record<string, number>
+    metrics: Record<string, {
+      per_game: { weighted_shrunk_delta: number | null }
+      per_minute: { weighted_shrunk_delta: number | null }
+    }>
+  }
+}
+
+export interface NbaFatiguePlayer {
+  player_id: string
+  player_name: string
+  player_name_aliases: string[]
+  season_type: 'Regular Season' | 'Playoffs'
+  scope: { seasons: string[]; start_date: string | null; end_date: string | null }
+  flags: {
+    team_change: boolean
+    teams: string[]
+    role_change: boolean
+    roles: string[]
+    starter_states: boolean[]
+    injury_affected_games: number
+    injury_context_missing_games: number
+    minutes_restriction_games: number
+    availability_complete: boolean
+    survivorship_bias_risk: boolean
+  }
+  conditions: {
+    back_to_back: NbaFatigueCondition
+    third_game_in_four_nights: NbaFatigueCondition
+  }
+}
+
+export interface NbaScheduleFatigueResult {
+  status: 'success'
+  indicator: {
+    key: 'nba_schedule_fatigue_effect'
+    formula_version: string
+    preview_only: true
+    production_eligible: false
+  }
+  scope: { seasons: string[]; start_date: string | null; end_date: string | null }
+  players: NbaFatiguePlayer[]
+  provenance: {
+    schedule: Record<string, unknown>
+    box_scores: Record<string, unknown>
+    reconciliation: Record<string, unknown> | null
+  }
+  audit: {
+    input_snapshot_sha256: string
+    formula_version: string
+    computed_at: string
+    logged?: boolean
+  }
+  isolation: {
+    preview_only: true
+    production_eligible: false
+    official_projection_mutated: false
+    selection_mutated: false
+    publication_mutated: false
+  }
+}
+
 export interface IndicatorConfig {
   id: string
   name: string
