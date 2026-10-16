@@ -610,7 +610,7 @@ export default function LandingPage() {
             color: C.muted, lineHeight: 1.65,
             margin: '0 0 52px', maxWidth: '560px',
           }}>
-            The Analytics Community is a private membership for serious NBA analysts.
+            247 Sports Intel is a private membership for serious sports analysts.
             Access to the engine is granted by tier — from published signals through full
             model operator access with backtesting and raw data export.
           </p>
@@ -769,7 +769,7 @@ export default function LandingPage() {
             alignItems: 'center', flexWrap: 'wrap', gap: '12px',
           }}>
             <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
-              © 2025 The Analytics Community
+              © 2026 247 Sports Intel LLC
             </div>
             <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
               {BRAND.supportEmail}
