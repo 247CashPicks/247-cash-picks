@@ -147,6 +147,7 @@
       "agent_run_id",
       "confidence",
       "data_quality_flags",
+      "defensive_impact_context",
       "direction",
       "edge_pct",
       "game_date",

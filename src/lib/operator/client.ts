@@ -418,6 +418,7 @@ export interface StagedSelection {
   platform: string | null
   line_pulled: boolean
   rebound_context?: ReboundContextResult
+  defensive_impact_context?: DefensiveImpactResult
   provenance: {
     config_id: string | null
     config_name: string | null
@@ -425,6 +426,69 @@ export interface StagedSelection {
     agent_run_short: string | null
     snapshot_hash_short: string | null
   }
+}
+
+export interface DefensiveImpactDefenderResult {
+  defender_name: string
+  season: string
+  as_of_date: string
+  defensive_metric_name: string
+  defensive_epm: number | null
+  defensive_percentile: number | null
+  defensive_rank: number | null
+  source_label: string
+  source_url: string
+  assignment_confidence: string
+  rotation_confidence: string
+  projected_minutes?: number
+  projected_shared_minutes?: number
+  position_overlap?: number
+  switchability?: number
+  closing_lineup_probability?: number
+  source_confidence?: number
+  primary_assignment_probability?: number
+  primary_exposure_share?: number
+  secondary_exposure_share?: number
+  primary_effect?: number
+  secondary_effect?: number
+  reasons: string[]
+}
+
+export interface DefensiveImpactResult {
+  status: 'ready' | 'unknown'
+  color: 'red' | 'yellow' | 'green' | 'gray'
+  icon: '▼' | '●' | '▲' | '?'
+  label: string
+  risk_score: number | null
+  confidence: 'medium' | 'high' | 'unknown'
+  primary_assignment_effect: number | null
+  secondary_exposure_effect: number | null
+  team_defense_effect: number | null
+  team_defense: {
+    opponent_team: string
+    opponent_defensive_rating: number
+    league_average_defensive_rating: number
+    scheme_help_factor: number
+    source_confidence: number
+  } | null
+  defenders: DefensiveImpactDefenderResult[]
+  prop_relevance: { primary: number; secondary: number; team: number } | null
+  reasons: string[]
+  caveat: string
+  formula_version: 'nba-defensive-impact-exposure-v1'
+}
+
+export interface NbaDefensiveImpactStatus {
+  status: 'license_required'
+  metric: string
+  canonical_field: 'DEF'
+  excluded_field: string
+  commercial_model_use_authorized: false
+  source_data_loaded: false
+  terms_url: string
+  reason: string
+  permitted_path: string
+  formula_version: 'nba-defensive-impact-exposure-v1'
 }
 
 export interface ReboundContextComponent {

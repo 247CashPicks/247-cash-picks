@@ -16,6 +16,7 @@ import RotationPanel from './RotationPanel'
 import UsageDifferentialPanel from './UsageDifferentialPanel'
 import ScheduleFatiguePanel from './ScheduleFatiguePanel'
 import CareerReboundingPanel from './CareerReboundingPanel'
+import DefensiveImpactPanel from './DefensiveImpactPanel'
 
 /**
  * One page, six panels, a league switcher, and an audit drawer.
@@ -186,6 +187,9 @@ export default function CommandCenter({
             </Panel>
             <Panel title="Career rebound reference / matchup context" error={null}>
               <CareerReboundingPanel />
+            </Panel>
+            <Panel title="Defensive EPM matchup exposure" error={null}>
+              <DefensiveImpactPanel />
             </Panel>
             <Panel title="Historical schedule-fatigue review" error={null}>
               <ScheduleFatiguePanel />
