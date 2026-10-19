@@ -15,6 +15,7 @@ import ScenarioPanel from './ScenarioPanel'
 import RotationPanel from './RotationPanel'
 import UsageDifferentialPanel from './UsageDifferentialPanel'
 import ScheduleFatiguePanel from './ScheduleFatiguePanel'
+import CareerReboundingPanel from './CareerReboundingPanel'
 
 /**
  * One page, six panels, a league switcher, and an audit drawer.
@@ -182,6 +183,9 @@ export default function CommandCenter({
             </Panel>
             <Panel title="Projection scenario sandbox" error={null}>
               <ScenarioPanel />
+            </Panel>
+            <Panel title="Career rebound reference / matchup context" error={null}>
+              <CareerReboundingPanel />
             </Panel>
             <Panel title="Historical schedule-fatigue review" error={null}>
               <ScheduleFatiguePanel />

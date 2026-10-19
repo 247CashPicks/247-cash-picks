@@ -7,6 +7,7 @@ import type {
   StagedSlateResponse, PreviewRunResponse, NflScheduleContext,
   ConfirmSelectionsResponse, ExternalLineRanksResponse,
 } from '@/lib/operator/client'
+import { ReboundContextBadge } from './CareerReboundingPanel'
 import { easternToday } from '@/lib/time/eastern'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
@@ -965,6 +966,7 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
                   {s.provenance.config_name ?? 'no config'}
                   {s.provenance.agent_run_short && ` · run ${s.provenance.agent_run_short}`}
                 </div>
+                <ReboundContextBadge value={s.rebound_context} />
               </td>
               <td style={{ ...td, ...mono, fontSize: '10px',
                            letterSpacing: '0.06em',

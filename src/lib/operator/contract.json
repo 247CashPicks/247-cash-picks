@@ -160,6 +160,7 @@
       "platform",
       "player_name",
       "provenance",
+      "rebound_context",
       "stat_type",
       "status",
       "team",

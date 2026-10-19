@@ -417,6 +417,7 @@ export interface StagedSelection {
   game_date: string
   platform: string | null
   line_pulled: boolean
+  rebound_context?: ReboundContextResult
   provenance: {
     config_id: string | null
     config_name: string | null
@@ -424,6 +425,62 @@ export interface StagedSelection {
     agent_run_short: string | null
     snapshot_hash_short: string | null
   }
+}
+
+export interface ReboundContextComponent {
+  name: string
+  raw_percent: number
+  weight: number
+  weighted_points: number
+  detail: string
+}
+
+export interface ReboundContextResult {
+  status: 'ready' | 'unknown'
+  color: 'red' | 'yellow' | 'green' | 'gray'
+  icon: '▼' | '●' | '▲' | '?'
+  label: 'Toughest / caution' | 'Neutral' | 'Favorable' | 'Unknown'
+  score: number | null
+  confidence: 'low' | 'medium' | 'high' | 'unknown'
+  reasons: string[]
+  components: ReboundContextComponent[]
+  formula_version: 'nba-rebound-context-v1'
+  thresholds: { red_below: number; green_at_or_above: number }
+}
+
+export interface NbaCareerReboundPlayer {
+  rank: number | null
+  player_name: string
+  current_team: string
+  position: string
+  roster_class: 'active_roster' | 'two_way' | 'unmatched_official_roster'
+  career_games: number | null
+  career_minutes: number | null
+  career_orb_per_100: number | null
+  career_drb_per_100: number | null
+  career_trb_per_100: number | null
+  sample_status: string
+  confidence: string
+  freshness: string
+  official_roster_source: string
+  career_source: string
+  retrieval_date: string
+}
+
+export interface NbaCareerReboundingResponse {
+  status: 'ready'
+  manifest: {
+    metric: string
+    retrieval_date: string
+    official_roster_count: number
+    ranked_player_count: number
+    no_career_metric_count: number
+    unmatched_official_count: number
+    bref_non_official_edge_case_count: number
+    sources: string[]
+    definition_guard: string
+  }
+  players: NbaCareerReboundPlayer[]
 }
 
 export interface ConfirmSelectionsResponse {
