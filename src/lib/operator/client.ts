@@ -599,6 +599,60 @@ export interface WagerConcentrationResult {
   }
 }
 
+export interface WagerConcentrationRow {
+  id: string
+  status: 'ready' | 'unknown'
+  severity: 'high' | 'elevated' | 'normal' | 'unknown'
+  color: 'red' | 'yellow' | 'green' | 'gray'
+  label: string
+  red_caution_flag: boolean
+  player_id: string
+  player_name: string
+  team: string
+  opponent_team: string
+  game_id: string
+  game_date: string
+  market_key: string
+  line: number | null
+  side: string
+  odds_american: number | null
+  bet_pct: number | null
+  handle_pct: number | null
+  handle_minus_bet_pp: number | null
+  bet_rank: number | null
+  handle_rank: number | null
+  sportsbook: string
+  source_label: string
+  source_url: string
+  market_timestamp: string
+  retrieved_at: string
+  freshness: string
+  coverage: string
+  calibration_version: string
+  formula_version: string
+  why_flagged: string[]
+  audited_at: string
+  selection_mutated: false
+}
+
+export interface WagerConcentrationResults {
+  slate: string
+  filters: {
+    slate: string
+    game: string | null
+    player: string | null
+    market: string | null
+    book: string | null
+  }
+  rows: WagerConcentrationRow[]
+  total: number
+  preview_only: true
+  sort_order: Array<'high' | 'elevated' | 'normal' | 'unknown'>
+  selection_mutated: false
+  source_rows_scanned: number
+  truncated: boolean
+}
+
 export interface ReboundContextComponent {
   name: string
   raw_percent: number

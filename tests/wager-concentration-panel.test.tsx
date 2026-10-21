@@ -5,6 +5,7 @@ import WagerConcentrationPanel, {
 } from '@/app/command/WagerConcentrationPanel'
 import type {
   NbaWagerConcentrationStatus, WagerConcentrationResult,
+  WagerConcentrationResults,
 } from '@/lib/operator/client'
 
 afterEach(() => vi.restoreAllMocks())
@@ -79,6 +80,29 @@ const result: WagerConcentrationResult = {
     publication_mutated: false },
 }
 
+const emptyResults: WagerConcentrationResults = {
+  slate: '2026-10-21',
+  filters: { slate: '2026-10-21', game: null, player: null, market: null, book: null },
+  rows: [], total: 0, preview_only: true,
+  sort_order: ['high', 'elevated', 'normal', 'unknown'],
+  selection_mutated: false, source_rows_scanned: 0, truncated: false,
+}
+
+function response(value: unknown) {
+  return new Response(JSON.stringify(value), {
+    status: 200, headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function standardFetch(url: string | URL | Request, init?: RequestInit) {
+  const path = String(url)
+  if (path.includes('/results')) return Promise.resolve(response(emptyResults))
+  if (path.endsWith('/analyze') && init?.method === 'POST') {
+    return Promise.resolve(response(result))
+  }
+  return Promise.resolve(response(status))
+}
+
 describe('wager concentration packet', () => {
   it('requires both a snapshot and calibration', () => {
     expect(parseWagerConcentrationPacket(JSON.stringify(packet)).snapshot)
@@ -89,9 +113,7 @@ describe('wager concentration packet', () => {
 
 describe('wager concentration panel', () => {
   it('shows the protected source and calibration boundary', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(status), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    })))
+    vi.stubGlobal('fetch', vi.fn(standardFetch))
     render(<WagerConcentrationPanel />)
     expect(await screen.findByText(/SOURCE REQUIRED/)).toBeTruthy()
     expect(screen.getByText(status.dollar_handle_policy)).toBeTruthy()
@@ -99,13 +121,7 @@ describe('wager concentration panel', () => {
   })
 
   it('renders raw metrics separately from calibrated severity and basketball risk', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(status), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(result), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      }))
+    const fetchMock = vi.fn(standardFetch)
     vi.stubGlobal('fetch', fetchMock)
     render(<WagerConcentrationPanel />)
     await screen.findByText(/SOURCE REQUIRED/)
@@ -128,9 +144,7 @@ describe('wager concentration panel', () => {
   })
 
   it('requires an audit reason before analysis', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(status), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn(standardFetch)
     vi.stubGlobal('fetch', fetchMock)
     render(<WagerConcentrationPanel />)
     await screen.findByText(/SOURCE REQUIRED/)
@@ -139,6 +153,54 @@ describe('wager concentration panel', () => {
     })
     fireEvent.click(screen.getByText('RUN PREVIEW REVIEW'))
     expect(screen.getByRole('alert').textContent).toContain('audit reason')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/analyze')))
+      .toBe(false)
+  })
+
+  it('renders the daily table in severity order with accessible status labels', async () => {
+    const rows = [
+      { id: 'r', status: 'ready', severity: 'high', color: 'red',
+        label: 'High wager concentration', red_caution_flag: true,
+        player_id: 'p1', player_name: 'Example Player', team: 'OKC',
+        opponent_team: 'DEN', game_id: 'g1', game_date: '2026-10-21',
+        market_key: 'player_rebounds', line: 10.5, side: 'over',
+        odds_american: -115, bet_pct: 40, handle_pct: 70,
+        handle_minus_bet_pp: 30, bet_rank: 4, handle_rank: 1,
+        sportsbook: 'DraftKings', source_label: 'Licensed market feed',
+        source_url: 'https://example.test/snapshot',
+        market_timestamp: '2026-10-21T17:00:00Z',
+        retrieved_at: '2026-10-21T17:01:00Z', freshness: 'fresh',
+        coverage: 'complete_and_matched', calibration_version: 'cal-v3',
+        formula_version: 'nba-wager-concentration-v1',
+        why_flagged: ['handle met calibrated high threshold'],
+        audited_at: '2026-10-21T17:02:00Z', selection_mutated: false,
+      },
+      { id: 'u', status: 'unknown', severity: 'unknown', color: 'gray',
+        label: 'Unknown', red_caution_flag: false, player_id: 'p2',
+        player_name: 'Unknown Player', team: 'LAL', opponent_team: 'BOS',
+        game_id: 'g2', game_date: '2026-10-21', market_key: 'points',
+        line: null, side: '', odds_american: null, bet_pct: null,
+        handle_pct: null, handle_minus_bet_pp: null, bet_rank: null,
+        handle_rank: null, sportsbook: 'Unknown', source_label: '', source_url: '',
+        market_timestamp: '', retrieved_at: '', freshness: 'stale_or_unverified',
+        coverage: 'partial_or_unmatched', calibration_version: '',
+        formula_version: 'nba-wager-concentration-v1',
+        why_flagged: ['provider coverage is partial'],
+        audited_at: '2026-10-21T17:02:00Z', selection_mutated: false,
+      },
+    ] as WagerConcentrationResults['rows']
+    const fetchMock = vi.fn((url: string | URL | Request) => {
+      if (String(url).includes('/results')) {
+        return Promise.resolve(response({ ...emptyResults, rows, total: 2 }))
+      }
+      return Promise.resolve(response(status))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<WagerConcentrationPanel />)
+    expect(await screen.findByLabelText('High wager concentration caution')).toBeTruthy()
+    expect(screen.getByLabelText('Wager concentration unknown')).toBeTruthy()
+    expect(screen.getByText('30.0 pp')).toBeTruthy()
+    expect(screen.getByText('cal-v3')).toBeTruthy()
+    expect(screen.getByText('provider coverage is partial')).toBeTruthy()
   })
 })

@@ -63,6 +63,10 @@ const ALLOWLIST = [
   // an authenticated operator is reviewing before approving projections.
   { re: /title="Chalk \/ wager concentration"/,
     why: 'protected operator diagnostic title' },
+  // Internal API path used to attach the same protected diagnostic to an exact
+  // operator slate row. It is code, not rendered customer-facing copy.
+  { re: /\/api\/operator\/nba-wager-concentration\/results/,
+    why: 'protected operator diagnostic API path' },
 ]
 
 const FILE_ALLOWLIST = [

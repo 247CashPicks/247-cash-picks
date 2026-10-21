@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type {
   NbaWagerConcentrationStatus, WagerConcentrationResult,
+  WagerConcentrationResults, WagerConcentrationRow,
 } from '@/lib/operator/client'
+import { easternToday } from '@/lib/time/eastern'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
 const control: React.CSSProperties = {
@@ -20,11 +22,30 @@ const tones: Record<WagerConcentrationResult['color'], string> = {
   red: 'var(--alert)', yellow: 'var(--amber)', green: 'var(--lime)',
   gray: 'var(--steel)',
 }
+const resultTone: Record<WagerConcentrationRow['severity'], string> = {
+  high: 'var(--alert)', elevated: 'var(--amber)', normal: 'var(--lime)',
+  unknown: 'var(--steel)',
+}
+const resultIcon: Record<WagerConcentrationRow['severity'], string> = {
+  high: '▲', elevated: '●', normal: '✓', unknown: '?',
+}
+const tableCell: React.CSSProperties = {
+  padding: '8px 9px', borderBottom: '1px solid var(--steel-line)',
+  verticalAlign: 'top', fontSize: '11px', lineHeight: 1.45,
+}
+const tableHead: React.CSSProperties = {
+  ...tableCell, ...mono, color: 'var(--steel)', fontSize: '9px',
+  letterSpacing: '.06em', textAlign: 'left', whiteSpace: 'nowrap',
+}
 
 export interface WagerConcentrationPacket {
   snapshot: Record<string, unknown>
   calibration: Record<string, unknown>
   basketball_risk?: Record<string, unknown>
+}
+
+type WagerFilters = {
+  slate: string; game: string; player: string; market: string; book: string
 }
 
 export function parseWagerConcentrationPacket(text: string): WagerConcentrationPacket {
@@ -53,6 +74,31 @@ function odds(value: number | null) {
   return value > 0 ? `+${value}` : `${value}`
 }
 
+function timestamp(value: string) {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString()
+}
+
+export function WagerCautionBadge({ row }: { row: WagerConcentrationRow | null }) {
+  if (!row) return null
+  const label = row.severity === 'high'
+    ? 'High wager concentration caution'
+    : row.severity === 'elevated'
+      ? 'Moderate wager concentration caution'
+      : row.severity === 'normal'
+        ? 'Verified no wager concentration caution'
+        : 'Wager concentration unknown'
+  return <span aria-label={label} title={label} style={{
+    ...mono, display: 'inline-flex', gap: '4px', alignItems: 'center',
+    marginTop: '4px', fontSize: '9px', letterSpacing: '.04em',
+    color: resultTone[row.severity],
+  }}>
+    <span aria-hidden>{resultIcon[row.severity]}</span>
+    {row.severity.toUpperCase()} CONCENTRATION
+  </span>
+}
+
 export default function WagerConcentrationPanel() {
   const [status, setStatus] = useState<NbaWagerConcentrationStatus | null>(null)
   const [packetText, setPacketText] = useState('')
@@ -60,6 +106,36 @@ export default function WagerConcentrationPanel() {
   const [result, setResult] = useState<WagerConcentrationResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [results, setResults] = useState<WagerConcentrationResults | null>(null)
+  const [resultsBusy, setResultsBusy] = useState(false)
+  const [resultsError, setResultsError] = useState<string | null>(null)
+  const [filters, setFilters] = useState<WagerFilters>({
+    slate: easternToday(), game: '', player: '', market: '', book: '',
+  })
+  const [appliedFilters, setAppliedFilters] = useState<WagerFilters>({
+    slate: easternToday(), game: '', player: '', market: '', book: '',
+  })
+
+  const loadResults = useCallback(async (signal?: AbortSignal) => {
+    setResultsBusy(true); setResultsError(null)
+    const params = new URLSearchParams({ slate: appliedFilters.slate })
+    for (const key of ['game', 'player', 'market', 'book'] as const) {
+      if (appliedFilters[key].trim()) params.set(key, appliedFilters[key].trim())
+    }
+    try {
+      const response = await fetch(
+        `/api/operator/nba-wager-concentration/results?${params.toString()}`,
+        { cache: 'no-store', signal })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) { setResultsError(apiError(body, response.status)); return }
+      setResults(body as WagerConcentrationResults)
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      setResultsError(cause instanceof Error ? cause.message : 'Daily results unavailable.')
+    } finally {
+      if (!signal?.aborted) setResultsBusy(false)
+    }
+  }, [appliedFilters])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -80,6 +156,12 @@ export default function WagerConcentrationPanel() {
     return () => controller.abort()
   }, [])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadResults(controller.signal)
+    return () => controller.abort()
+  }, [loadResults])
+
   async function analyze() {
     if (!reason.trim()) { setError('An audit reason is required.'); return }
     let packet: WagerConcentrationPacket
@@ -97,6 +179,7 @@ export default function WagerConcentrationPanel() {
       const body = await response.json().catch(() => null)
       if (!response.ok) { setError(apiError(body, response.status)); return }
       setResult(body as WagerConcentrationResult)
+      await loadResults()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Preview backend is unreachable.')
     } finally {
@@ -210,5 +293,123 @@ export default function WagerConcentrationPanel() {
         </div>
       </div>
     </div> : null}
+    <DailyResultsTable results={results} filters={filters} setFilters={setFilters}
+      busy={resultsBusy} error={resultsError}
+      onRefresh={() => {
+        const unchanged = Object.keys(filters).every(key =>
+          filters[key as keyof WagerFilters] === appliedFilters[key as keyof WagerFilters])
+        if (unchanged) void loadResults()
+        else setAppliedFilters({ ...filters })
+      }} />
   </div>
+}
+
+function DailyResultsTable({ results, filters, setFilters, busy, error, onRefresh }: {
+  results: WagerConcentrationResults | null
+  filters: WagerFilters
+  setFilters: React.Dispatch<React.SetStateAction<WagerFilters>>
+  busy: boolean
+  error: string | null
+  onRefresh: () => void
+}) {
+  const update = (key: keyof typeof filters, value: string) => {
+    setFilters(current => ({ ...current, [key]: value }))
+  }
+  return <section aria-label="Daily wager concentration results"
+    style={{ borderTop: '1px solid var(--steel-line)' }}>
+    <div style={{ padding: '12px var(--pad)', display: 'grid', gap: '9px' }}>
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between',
+                    alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <strong style={{ ...mono, color: 'var(--steel-bright)', fontSize: '12px' }}>
+          DAILY PROP-LEVEL RESULTS
+        </strong>
+        <span role="status" style={{ color: 'var(--steel)', fontSize: '10px' }}>
+          {busy ? 'Refreshing…' : `${results?.total ?? 0} audited row(s)`}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gap: '8px',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        {([
+          ['slate', 'Slate date', 'date'], ['game', 'Game', 'text'],
+          ['player', 'Player', 'text'], ['market', 'Market', 'text'],
+          ['book', 'Sportsbook', 'text'],
+        ] as const).map(([key, label, type]) => <label key={key}
+          style={{ display: 'grid', gap: '4px', ...mono, fontSize: '9px',
+                   color: 'var(--steel)' }}>
+          {label.toUpperCase()}
+          <input aria-label={`Wager results ${label.toLowerCase()} filter`}
+            type={type} value={filters[key]}
+            onChange={(event) => update(key, event.target.value)} style={control} />
+        </label>)}
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <button type="button" onClick={onRefresh} disabled={busy} style={button}>
+          REFRESH RESULTS
+        </button>
+        <span style={{ color: 'var(--steel)', fontSize: '10px' }}>
+          Order: red caution · yellow moderate · verified neutral · gray Unknown.
+          No row is hidden, downgraded, rejected, or removed.
+        </span>
+      </div>
+      {error ? <p role="alert" style={{ margin: 0, color: 'var(--alert)',
+                                        fontSize: '12px' }}>{error}</p> : null}
+    </div>
+
+    <div style={{ overflowX: 'auto' }}>
+      <table aria-label="Daily audited wager concentration results"
+        style={{ width: '100%', minWidth: '1550px', borderCollapse: 'collapse' }}>
+        <caption style={{ position: 'absolute', width: '1px', height: '1px',
+                          padding: 0, margin: '-1px', overflow: 'hidden',
+                          clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+          Audited NBA prop-level wager concentration results for {results?.slate ?? filters.slate}
+        </caption>
+        <thead><tr>{[
+          'Caution / status', 'Player', 'Team / opponent', 'Prop market',
+          'Line / side', 'Current odds', 'Bet %', 'Handle %', 'Gap',
+          'Bet rank', 'Handle rank', 'Sportsbook / source',
+          'Market / retrieval time', 'Freshness', 'Calibration', 'Why flagged',
+        ].map(label => <th key={label} scope="col" style={tableHead}>{label}</th>)}</tr></thead>
+        <tbody>
+          {(results?.rows ?? []).map(row => <tr key={row.id}
+            style={{ borderLeft: `4px solid ${resultTone[row.severity]}` }}>
+            <td style={tableCell}><WagerCautionBadge row={row} />
+              <div style={{ color: 'var(--steel)', marginTop: '3px' }}>{row.label}</div></td>
+            <td style={tableCell}><strong>{row.player_name || 'Unknown'}</strong></td>
+            <td style={tableCell}>{row.team || '—'} / {row.opponent_team || '—'}</td>
+            <td style={tableCell}>{row.market_key || 'Unknown'}</td>
+            <td style={{ ...tableCell, ...mono }}>
+              {row.line ?? '—'} {row.side ? row.side.toUpperCase() : '—'}</td>
+            <td style={{ ...tableCell, ...mono }}>{odds(row.odds_american)}</td>
+            <td style={{ ...tableCell, ...mono }}>{number(row.bet_pct, '%')}</td>
+            <td style={{ ...tableCell, ...mono }}>{number(row.handle_pct, '%')}</td>
+            <td style={{ ...tableCell, ...mono }}>
+              {number(row.handle_minus_bet_pp, ' pp')}</td>
+            <td style={{ ...tableCell, ...mono }}>{row.bet_rank ?? '—'}</td>
+            <td style={{ ...tableCell, ...mono }}>{row.handle_rank ?? '—'}</td>
+            <td style={tableCell}><strong>{row.sportsbook || 'Unknown'}</strong>
+              {row.source_url.startsWith('https://') ? <div><a href={row.source_url}
+                target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>
+                {row.source_label || 'Source'}</a></div> : null}</td>
+            <td style={tableCell}>Market {timestamp(row.market_timestamp)}<br />
+              Retrieved {timestamp(row.retrieved_at)}</td>
+            <td style={tableCell}>{row.freshness}<br />{row.coverage}</td>
+            <td style={tableCell}>{row.calibration_version || 'Unknown'}<br />
+              <span style={{ color: 'var(--steel)' }}>{row.formula_version}</span></td>
+            <td style={{ ...tableCell, minWidth: '250px' }}>
+              {row.why_flagged.length ? row.why_flagged.join('; ') : 'No verified reason recorded.'}
+            </td>
+          </tr>)}
+          {!busy && (results?.rows.length ?? 0) === 0 ? <tr><td colSpan={16}
+            style={{ ...tableCell, padding: '18px var(--pad)', color: 'var(--steel)' }}>
+            No audited prop reviews match these filters. This is not a neutral signal;
+            coverage remains Unknown until an authorized snapshot is reviewed.
+          </td></tr> : null}
+        </tbody>
+      </table>
+    </div>
+    {results?.truncated ? <p role="alert" style={{ margin: 0, padding: '10px var(--pad)',
+        color: 'var(--amber)', fontSize: '11px' }}>
+      Only the newest 1,000 audited reviews were scanned. Narrow the filters.
+    </p> : null}
+  </section>
 }
