@@ -491,6 +491,114 @@ export interface NbaDefensiveImpactStatus {
   formula_version: 'nba-defensive-impact-exposure-v1'
 }
 
+export interface NbaWagerConcentrationStatus {
+  status: 'source_required'
+  indicator_key: 'nba_wager_concentration'
+  display_name: 'Chalk / Wager Concentration'
+  formula_version: 'nba-wager-concentration-v1'
+  preview_only: true
+  production_eligible: false
+  preferred_source: string
+  source_data_loaded: false
+  commercial_use_authorized: false
+  reason: string
+  required_market_fields: string[]
+  dollar_handle_policy: string
+  threshold_policy: string
+  isaiah_hartenstein_example: string
+}
+
+export interface WagerConcentrationResult {
+  status: 'ready' | 'unknown'
+  severity: 'high' | 'elevated' | 'normal' | 'unknown'
+  color: 'red' | 'yellow' | 'green' | 'gray'
+  icon: '!' | '●' | '✓' | '?'
+  label: string
+  red_caution_flag: boolean
+  raw_metrics: null | {
+    provider_name: string
+    sportsbook: string
+    source_label: string
+    source_url: string
+    provider_terms_url: string
+    market_timestamp: string
+    retrieved_at: string
+    game_id: string
+    game_date: string
+    player_id: string
+    player_name: string
+    team: string
+    opponent_team: string
+    market_key: string
+    line: number
+    side: string
+    odds_american: number | null
+    bet_pct: number
+    handle_pct: number
+    handle_minus_bet_pp: number
+    bet_rank: number | null
+    handle_rank: number | null
+    line_movement: {
+      previous_line: number | null
+      current_line: number
+      line_delta: number | null
+      previous_odds_american: number | null
+      current_odds_american: number | null
+      previous_market_timestamp: string | null
+    }
+  }
+  thresholds: null | {
+    status: string
+    calibration_id: string
+    method: string
+    calibrated_at: string
+    retained_snapshot_sha256: string
+    training_rows: number
+    holdout_rows: number
+    caution_handle_pct: number
+    high_handle_pct: number
+    caution_gap_pp: number
+    high_gap_pp: number
+    holdout_flagged_rows: number
+    holdout_adverse_rate_pct: number | null
+    source_label: string
+    source_url: string
+  }
+  why_fired: string[]
+  reasons: string[]
+  freshness: string
+  coverage: string
+  basketball_risk: {
+    personal_foul_rate: number | null
+    opponent_rim_pressure: number | null
+    likely_matchup: string | null
+    projected_minutes: number | null
+    source_label: string | null
+    source_url: string | null
+    as_of: string | null
+  }
+  advisory: {
+    selection_removed: false
+    automatic_rejection: false
+    causal_performance_claim: false
+    message: string
+  }
+  audit: {
+    input_snapshot_sha256: string
+    calibration_snapshot_sha256: string
+    formula_version: 'nba-wager-concentration-v1'
+    computed_at: string
+    logged?: boolean
+  }
+  isolation: {
+    preview_only: true
+    production_eligible: false
+    official_projection_mutated: false
+    selection_mutated: false
+    publication_mutated: false
+  }
+}
+
 export interface ReboundContextComponent {
   name: string
   raw_percent: number

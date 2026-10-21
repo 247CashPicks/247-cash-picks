@@ -17,6 +17,7 @@ import UsageDifferentialPanel from './UsageDifferentialPanel'
 import ScheduleFatiguePanel from './ScheduleFatiguePanel'
 import CareerReboundingPanel from './CareerReboundingPanel'
 import DefensiveImpactPanel from './DefensiveImpactPanel'
+import WagerConcentrationPanel from './WagerConcentrationPanel'
 
 /**
  * One page, six panels, a league switcher, and an audit drawer.
@@ -193,6 +194,9 @@ export default function CommandCenter({
             </Panel>
             <Panel title="Historical schedule-fatigue review" error={null}>
               <ScheduleFatiguePanel />
+            </Panel>
+            <Panel title="Chalk / wager concentration" error={null}>
+              <WagerConcentrationPanel />
             </Panel>
           </>
         )}
