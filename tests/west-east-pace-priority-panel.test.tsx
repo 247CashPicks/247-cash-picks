@@ -42,9 +42,16 @@ const result: NbaWestEastPaceResult = {
     confidence: 'high', fail_closed_reasons: [],
     projection_coefficient_pct: 0, automatic_projection_adjustment: false,
   }],
-  outcome_tracking: { status: 'ongoing', unit: 'settled player prop',
-    dimensions: ['game_date', 'player'],
-    promotion_rule: 'No coefficient without stable multi-season holdout evidence.' },
+  outcome_tracking: { status: 'ongoing',
+    audit_schedule: '04:15 America/New_York after prior slate final',
+    pregame_snapshot: 'immutable', unit: 'settled player prop',
+    dimensions: ['game_date', 'player'], comparisons: ['raw_actual'],
+    verified_context_labels: ['foul_trouble'],
+    error_decomposition: ['minutes', 'rate_or_efficiency'],
+    small_sample_policy: 'Do not overinterpret tiny-minute per-36 samples.',
+    promotion_rule: 'No coefficient without stable multi-season holdout evidence.',
+    recommendation_contract: 'State benefit, risk, sample size, and confidence.',
+    automatic_model_change: false },
   isolation: { preview_only: true, production_eligible: false,
     selection_mutated: false, projection_mutated: false },
 }
@@ -63,6 +70,8 @@ describe('West-to-East pace-up priority panel', () => {
     expect(screen.getByText(/CONFIDENCE HIGH/)).toBeTruthy()
     expect(screen.getByText(/coefficient remains 0.0%/i)).toBeTruthy()
     expect(screen.getByText(/not universal causal proof/i)).toBeTruthy()
+    expect(screen.getByText(/04:15 America\/New_York/)).toBeTruthy()
+    expect(screen.getByText(/tiny-minute per-36 samples/i)).toBeTruthy()
   })
 
   it('shows backend failures instead of a blank panel', async () => {

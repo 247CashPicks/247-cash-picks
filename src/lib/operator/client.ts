@@ -337,9 +337,17 @@ export interface NbaWestEastPaceResult {
   players: NbaWestEastPacePlayer[]
   outcome_tracking: {
     status: 'ongoing'
+    audit_schedule: string
+    pregame_snapshot: 'immutable'
     unit: string
     dimensions: string[]
+    comparisons: string[]
+    verified_context_labels: string[]
+    error_decomposition: string[]
+    small_sample_policy: string
     promotion_rule: string
+    recommendation_contract: string
+    automatic_model_change: false
   }
   isolation: {
     preview_only: true

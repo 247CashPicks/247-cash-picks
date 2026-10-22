@@ -131,7 +131,11 @@ export default function WestEastPacePriorityPanel() {
                              fontSize: '10px', lineHeight: 1.5, ...mono }}>
       <span>BACKTEST · {result.indicator.backtest.verdict}</span>
       <span>OWNER OBSERVATION · {result.indicator.owner_observation.game_date} {result.indicator.owner_observation.team} · {result.indicator.owner_observation.evidence_role}; {result.indicator.owner_observation.causal_status}</span>
-      <span>OUTCOME TRACKING · {result.outcome_tracking.status.toUpperCase()} · {result.outcome_tracking.promotion_rule}</span>
+      <span>OUTCOME TRACKING · {result.outcome_tracking.status.toUpperCase()} · {result.outcome_tracking.audit_schedule} · {result.outcome_tracking.pregame_snapshot.toUpperCase()} PREGAME SNAPSHOT</span>
+      <span>MISS REVIEW · {result.outcome_tracking.error_decomposition.join(' · ')}</span>
+      <span>{result.outcome_tracking.small_sample_policy}</span>
+      <span>{result.outcome_tracking.promotion_rule}</span>
+      <span>{result.outcome_tracking.recommendation_contract}</span>
       <span style={{ color: 'var(--lime)' }}>PROTECTED PREVIEW · NO PROJECTION OR SELECTION MUTATION</span>
     </div>}
   </div>
