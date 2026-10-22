@@ -143,6 +143,40 @@ describe('wager concentration panel', () => {
     expect(screen.getByText(result.advisory.message)).toBeTruthy()
   })
 
+  it('shows PrizePicks as reference-only without a source deep link', async () => {
+    const prizePicksResult: WagerConcentrationResult = {
+      ...result,
+      raw_metrics: {
+        ...result.raw_metrics,
+        provider_name: 'PrizePicks',
+        sportsbook: 'PrizePicks',
+        source_label: 'PrizePicks line snapshot',
+        source_url: 'https://prizepicks.com/line/example',
+      },
+    }
+    const fetchMock = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url)
+      if (path.includes('/results')) return Promise.resolve(response(emptyResults))
+      if (path.endsWith('/analyze') && init?.method === 'POST') {
+        return Promise.resolve(response(prizePicksResult))
+      }
+      return Promise.resolve(response(status))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = render(<WagerConcentrationPanel />)
+    await screen.findByText(/SOURCE REQUIRED/)
+    fireEvent.change(screen.getByLabelText('Wager concentration snapshot JSON'), {
+      target: { value: JSON.stringify(packet) },
+    })
+    fireEvent.change(screen.getByLabelText('Wager concentration audit reason'), {
+      target: { value: 'Verify reference-only rendering' },
+    })
+    fireEvent.click(screen.getByText('RUN PREVIEW REVIEW'))
+    expect(await screen.findByText('REFERENCE ONLY — DO NOT PLACE')).toBeTruthy()
+    expect(container.querySelector('a[href="https://prizepicks.com/line/example"]'))
+      .toBeNull()
+  })
+
   it('requires an audit reason before analysis', async () => {
     const fetchMock = vi.fn(standardFetch)
     vi.stubGlobal('fetch', fetchMock)

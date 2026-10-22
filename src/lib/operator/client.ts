@@ -546,6 +546,16 @@ export interface WagerConcentrationResult {
       current_odds_american: number | null
       previous_market_timestamp: string | null
     }
+    source_policy?: {
+      source: string
+      classification: 'reference_only' | 'approved_subject_to_controls' | 'unapproved'
+      display_label: string
+      execution_eligible: boolean
+      placement_instructions_allowed: false
+      deep_link_allowed: false
+      approved_execution_venue: boolean
+      policy_version: string
+    }
   }
   thresholds: null | {
     status: string
@@ -633,6 +643,12 @@ export interface WagerConcentrationRow {
   why_flagged: string[]
   audited_at: string
   selection_mutated: false
+  source_classification?: 'reference_only' | 'approved_subject_to_controls' | 'unapproved'
+  source_display_label?: string
+  execution_eligible?: boolean
+  placement_instructions_allowed?: false
+  deep_link_url?: null
+  policy_version?: string
 }
 
 export interface WagerConcentrationResults {

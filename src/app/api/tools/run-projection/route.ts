@@ -7,6 +7,7 @@ import { BRAND } from '@/config/brand'
 import { sportFromRequest } from '@/lib/sport/request'
 import type { ProjectionInputs } from '@/lib/picks/types'
 import { easternToday } from '@/lib/time/eastern'
+import { marketSourcePolicy } from '@/lib/market-source-policy'
 
 export async function POST(req: NextRequest) {
   // NOT in the recon's list of four holes, but the same class: this route had
@@ -153,6 +154,7 @@ export async function POST(req: NextRequest) {
       ast: output.projAst,
     }
     lines.forEach(l => {
+      if (!marketSourcePolicy(l.platform).executionEligible) return
       const proj = projMap[l.stat_type]
       if (proj !== undefined) {
         const edge = proj - l.line

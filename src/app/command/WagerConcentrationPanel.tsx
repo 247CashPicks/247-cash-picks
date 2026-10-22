@@ -6,6 +6,7 @@ import type {
   WagerConcentrationResults, WagerConcentrationRow,
 } from '@/lib/operator/client'
 import { easternToday } from '@/lib/time/eastern'
+import { ReferenceOnlyLabel, marketSourcePolicy } from '@/lib/market-source-policy'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
 const control: React.CSSProperties = {
@@ -78,6 +79,18 @@ function timestamp(value: string) {
   if (!value) return '—'
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString()
+}
+
+function SourceReference({ source, label, url }: {
+  source: unknown; label: string; url: string
+}) {
+  const policy = marketSourcePolicy(source)
+  const text = label || 'Source'
+  if (policy.classification === 'reference_only' || !url.startsWith('https://')) {
+    return <span style={{ color: 'var(--steel)' }}>{text}</span>
+  }
+  return <a href={url} target="_blank" rel="noreferrer"
+    style={{ color: 'var(--blue)' }}>{text}</a>
 }
 
 export function WagerCautionBadge({ row }: { row: WagerConcentrationRow | null }) {
@@ -264,9 +277,10 @@ export default function WagerConcentrationPanel() {
         <span>PRIOR / CURRENT ODDS <strong>
           {odds(result.raw_metrics.line_movement.previous_odds_american)} → {' '}
           {odds(result.raw_metrics.line_movement.current_odds_american)}</strong></span>
-        <span>SOURCE <a href={result.raw_metrics.source_url} target="_blank"
-          rel="noreferrer" style={{ color: 'var(--blue)' }}>
-          {result.raw_metrics.source_label}</a></span>
+        <span>SOURCE <SourceReference source={result.raw_metrics.sportsbook}
+          label={result.raw_metrics.source_label} url={result.raw_metrics.source_url} />
+          <div><ReferenceOnlyLabel source={result.raw_metrics.sportsbook} /></div>
+        </span>
       </div> : null}
 
       {result.thresholds ? <div style={{ padding: '12px var(--pad)',
@@ -387,9 +401,9 @@ function DailyResultsTable({ results, filters, setFilters, busy, error, onRefres
             <td style={{ ...tableCell, ...mono }}>{row.bet_rank ?? '—'}</td>
             <td style={{ ...tableCell, ...mono }}>{row.handle_rank ?? '—'}</td>
             <td style={tableCell}><strong>{row.sportsbook || 'Unknown'}</strong>
-              {row.source_url.startsWith('https://') ? <div><a href={row.source_url}
-                target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>
-                {row.source_label || 'Source'}</a></div> : null}</td>
+              <div><ReferenceOnlyLabel source={row.sportsbook} /></div>
+              <div><SourceReference source={row.sportsbook}
+                label={row.source_label} url={row.source_url} /></div></td>
             <td style={tableCell}>Market {timestamp(row.market_timestamp)}<br />
               Retrieved {timestamp(row.retrieved_at)}</td>
             <td style={tableCell}>{row.freshness}<br />{row.coverage}</td>
