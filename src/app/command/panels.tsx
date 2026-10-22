@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   AgentHealthRow, AuditEntry, CompareResponse, Indicator, IndicatorConfig,
   IndicatorsResponse, OperatorMe, StagedSelection,
   StagedSlateResponse, PreviewRunResponse, NflScheduleContext,
-  ConfirmSelectionsResponse, ExternalLineRanksResponse,
+  ConfirmSelectionsResponse, ExternalLineRanksResponse, WagerConcentrationRow,
 } from '@/lib/operator/client'
+import { ReboundContextBadge } from './CareerReboundingPanel'
+import { DefensiveImpactBadge } from './DefensiveImpactPanel'
+import { WagerCautionBadge } from './WagerConcentrationPanel'
 import { easternToday } from '@/lib/time/eastern'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
@@ -191,11 +194,18 @@ export function IndicatorsPanel({ data, editing, onChanged }: {
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--steel)',
                                   marginTop: '2px' }}>{i.description}</div>
+                    {i.runtime_only && <div style={{ ...mono, marginTop: '4px',
+                      fontSize: '10px', color: 'var(--blue)' }}>
+                      {i.formula_version && `FORMULA ${i.formula_version} · `}
+                      {i.unit?.toUpperCase()} ·{' '}
+                      {(i.applicability ?? []).map((a) => a.comparison).join(' · ')}
+                    </div>}
                     <VerdictChip i={i} />
                   </td>
                   <td style={{ ...td, ...num, width: '14%' }}>
                     <span style={{ color: 'var(--steel-bright)' }}>
-                      {typeof i.value === 'boolean'
+                      {i.runtime_only ? 'COMPUTED PER MATCHUP'
+                        : typeof i.value === 'boolean'
                         ? (i.value ? 'ON' : 'OFF') : i.value}
                     </span>
                     {i.min_value !== null && (
@@ -231,6 +241,14 @@ function IndicatorControl({ i, editable, busy, onSet }: {
   onSet: (v: boolean | number) => void
 }) {
   const [draft, setDraft] = useState<string>(String(i.value))
+
+  if (i.runtime_only) {
+    return (
+      <span style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+        runtime observation — not configurable
+      </span>
+    )
+  }
 
   if (!i.toggleable) {
     return (
@@ -883,6 +901,25 @@ export function stagedSlateHeading(slate: StagedSlateResponse): string {
     : `${slate.league} · ${range}`
 }
 
+function marketIdentity(value: string) {
+  return value.toLocaleLowerCase().replace(/^player_/, '').replace(/[^a-z0-9]/g, '')
+}
+
+export function matchingWagerRow(
+  selection: StagedSelection, rows: WagerConcentrationRow[],
+): WagerConcentrationRow | null {
+  const player = selection.player_name.trim().toLocaleLowerCase()
+  const stat = marketIdentity(selection.stat_type)
+  const direction = selection.direction.trim().toLocaleLowerCase()
+  return rows.find(row => row.status === 'ready'
+    && row.game_date === selection.game_date
+    && row.player_name.trim().toLocaleLowerCase() === player
+    && (marketIdentity(row.market_key).includes(stat)
+      || stat.includes(marketIdentity(row.market_key)))
+    && row.line === selection.line
+    && row.side.trim().toLocaleLowerCase() === direction) ?? null
+}
+
 export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined }: {
   slate: StagedSlateResponse
   isOwner?: boolean
@@ -893,6 +930,30 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [wagerRows, setWagerRows] = useState<WagerConcentrationRow[]>([])
+
+  useEffect(() => {
+    if (slate.league !== 'NBA' || selections.length === 0) return
+    const controller = new AbortController()
+    const dates = [...new Set(selections.map(selection => selection.game_date))]
+    async function load() {
+      try {
+        const responses = await Promise.all(dates.map(date => fetch(
+          `/api/operator/nba-wager-concentration/results?slate=${encodeURIComponent(date)}`,
+          { cache: 'no-store', signal: controller.signal })))
+        const packets = await Promise.all(responses.map(async response => response.ok
+          ? response.json() as Promise<{ rows?: WagerConcentrationRow[] }>
+          : { rows: [] }))
+        setWagerRows(packets.flatMap(packet => packet.rows ?? []))
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+          setWagerRows([])
+        }
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [slate.league, selections])
 
   async function confirm() {
     if (!isOwner || selected.length === 0) return
@@ -933,8 +994,9 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
               {h}</th>))}
         </tr></thead>
         <tbody>
-          {selections.map((s) => (
-            <tr key={s.id}>
+          {selections.map((s) => {
+            const wagerRow = matchingWagerRow(s, wagerRows)
+            return <tr key={s.id}>
               <td style={td}>
                 {isOwner && s.status === 'pending' ? (
                   <input type="checkbox" aria-label={`Select ${s.player_name}`}
@@ -950,6 +1012,9 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
                   {s.provenance.config_name ?? 'no config'}
                   {s.provenance.agent_run_short && ` · run ${s.provenance.agent_run_short}`}
                 </div>
+                <ReboundContextBadge value={s.rebound_context} />
+                <DefensiveImpactBadge value={s.defensive_impact_context} />
+                <WagerCautionBadge row={wagerRow} />
               </td>
               <td style={{ ...td, ...mono, fontSize: '10px',
                            letterSpacing: '0.06em',
@@ -965,7 +1030,7 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
                            color: s.line_pulled ? 'var(--alert)' : 'var(--steel)' }}>
                 {s.line_pulled ? 'PULLED' : '—'}</td>
             </tr>
-          ))}
+          })}
         </tbody>
       </table>
       <div style={{ padding: '10px var(--pad)', display: 'flex', gap: '10px',

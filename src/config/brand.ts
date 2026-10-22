@@ -1,10 +1,10 @@
 export const BRAND = {
   slug:         'datanexus',                        // DB KEY — never change, used in all Supabase queries
-  name:         'The Analytics Community',
-  tagline:      'Run the model. See the gap.',
-  subTagline:   'Not a pick service — the engine itself.',
-  domain:       'theanalyticscommunity.com',
-  supportEmail: 'support@theanalyticscommunity.com',
+  name:         '247 Sports Intel',
+  tagline:      'AI-Powered Sports Intelligence',
+  subTagline:   'Data-driven analytics, predictive modeling, and member intelligence.',
+  domain:       '247sportsintel.com',
+  supportEmail: 'support@247sportsintel.com',
   supabaseUrl:  'https://pdqyolxcnlbsxenmcxwg.supabase.co',
 
   colors: {

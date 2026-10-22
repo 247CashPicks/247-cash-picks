@@ -27,6 +27,7 @@ export type ProjRow = Record<string, unknown> & {
   confidence_band: string | null
   _edgePct: number | null
   _headlineStat: string | null
+  _marketEligible?: boolean
   /** null means the registry could not be read; do not present the values as
    * endorsed in that state either. */
   _excludedByGuard: boolean | null
@@ -130,6 +131,7 @@ export default function ProjectionsPanel(
         pageRows.map((p, i) => {
           const edgePct = p._edgePct
           const excluded = p._excludedByGuard
+          const marketEligible = p._marketEligible !== false
           const edgeColor = edgePct != null
             ? edgePct >= 10 ? C.signalCyan
             : edgePct >= 5  ? C.platinum
@@ -182,17 +184,17 @@ export default function ProjectionsPanel(
                   <input type="hidden" name="projection_id" value={p.id} />
                   <button
                     type="submit"
-                    disabled={excluded !== false}
+                    disabled={excluded !== false || !marketEligible}
                     style={{
                       background: 'transparent', border: `1px solid ${C.borderEmphasis}`,
                       padding: '5px 10px', color: C.signalCyan,
                       fontFamily: F.mono, fontSize: '11px', fontWeight: 500,
                       letterSpacing: '0.08em',
-                      cursor: excluded === false ? 'pointer' : 'not-allowed',
-                      opacity: excluded === false ? 1 : 0.45,
+                      cursor: excluded === false && marketEligible ? 'pointer' : 'not-allowed',
+                      opacity: excluded === false && marketEligible ? 1 : 0.45,
                     }}
                   >
-                    + ADD
+                    {marketEligible ? '+ ADD' : 'NO LINE'}
                   </button>
                 </form>
               </div>

@@ -6,10 +6,11 @@ import type {
 import {
   ComparePanel, IndicatorsPanel, Panel, PromotePanel, RunHealthPanel,
   SlatePanel, VerdictChip,
-  contradictsVerdict, slateEmptyMessage,
+  contradictsVerdict, matchingWagerRow, slateEmptyMessage,
 } from '@/app/command/panels'
 import type {
   NflScheduleContext, StagedSelection, StagedSlateResponse,
+  WagerConcentrationRow,
 } from '@/lib/operator/client'
 
 /**
@@ -110,6 +111,30 @@ describe('contradiction marker', () => {
 })
 
 describe('guards and fixed numerics', () => {
+  it('renders Opponent Pace Effect as a first-class immutable runtime indicator', () => {
+    render(<IndicatorsPanel
+      data={response([indicator({
+        key: 'nba_opponent_pace_effect_pct',
+        display_name: 'Opponent Pace Effect',
+        description: 'Opponent corresponding unit pace versus league average.',
+        category: 'diagnostic', league: 'NBA',
+        value_type: 'computed_numeric', value: null, default_value: null,
+        min_value: -100, max_value: 100, bounds_source: 'physical',
+        toggleable: false, runtime_only: true,
+        formula_version: '1.0.0', unit: 'percent',
+        applicability: [
+          { unit: 'starter', comparison: 'starter_vs_starter' },
+          { unit: 'bench', comparison: 'bench_vs_bench' },
+        ], backtest_verdict: null, backtest_effect: null,
+      })])}
+      editing={null} onChanged={() => {}} />)
+    expect(screen.getByText('Opponent Pace Effect')).toBeTruthy()
+    expect(screen.getByText('COMPUTED PER MATCHUP')).toBeTruthy()
+    expect(screen.getByText('runtime observation — not configurable')).toBeTruthy()
+    expect(screen.getByText(/FORMULA 1.0.0 · PERCENT/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'SET' })).toBeNull()
+  })
+
   it('renders a guard as locked with the reason', () => {
     render(<IndicatorsPanel
       data={response([indicator({ key: 'implausible_edge_pct',
@@ -455,6 +480,30 @@ function slate(over: Partial<StagedSlateResponse> = {}): StagedSlateResponse {
 }
 
 describe('staged slate', () => {
+  it('matches only the exact verified prop for a concentration caution', () => {
+    const selection = { ...sel('Example Player', 'pending'),
+      game_date: '2026-10-21', stat_type: 'player_rebounds', line: 10.5,
+      direction: 'over' }
+    const row = {
+      id: 'w1', status: 'ready', severity: 'high', color: 'red',
+      label: 'High wager concentration', red_caution_flag: true,
+      player_id: 'p1', player_name: 'Example Player', team: 'OKC',
+      opponent_team: 'DEN', game_id: 'g1', game_date: '2026-10-21',
+      market_key: 'rebounds', line: 10.5, side: 'over', odds_american: -115,
+      bet_pct: 40, handle_pct: 70, handle_minus_bet_pp: 30,
+      bet_rank: 4, handle_rank: 1, sportsbook: 'DraftKings',
+      source_label: 'Licensed', source_url: 'https://example.test/source',
+      market_timestamp: '2026-10-21T17:00:00Z',
+      retrieved_at: '2026-10-21T17:01:00Z', freshness: 'fresh',
+      coverage: 'complete_and_matched', calibration_version: 'cal-v3',
+      formula_version: 'nba-wager-concentration-v1', why_flagged: ['high'],
+      audited_at: '2026-10-21T17:02:00Z', selection_mutated: false,
+    } as WagerConcentrationRow
+    expect(matchingWagerRow(selection, [row])).toEqual(row)
+    expect(matchingWagerRow({ ...selection, line: 11.5 }, [row])).toBeNull()
+    expect(matchingWagerRow(selection, [{ ...row, status: 'unknown' }])).toBeNull()
+  })
+
   it('shows every state, not only pending', () => {
     render(<SlatePanel slate={slate({
       selections: [sel('Pends', 'pending'), sel('Pubs', 'published')],
