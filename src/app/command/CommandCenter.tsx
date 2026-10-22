@@ -18,6 +18,7 @@ import ScheduleFatiguePanel from './ScheduleFatiguePanel'
 import CareerReboundingPanel from './CareerReboundingPanel'
 import DefensiveImpactPanel from './DefensiveImpactPanel'
 import WagerConcentrationPanel from './WagerConcentrationPanel'
+import WestEastPacePriorityPanel from './WestEastPacePriorityPanel'
 
 /**
  * One page, six panels, a league switcher, and an audit drawer.
@@ -177,6 +178,9 @@ export default function CommandCenter({
         )}
         {league === 'NBA' && (
           <>
+            <Panel title="West-to-East pace-up — owner high priority" error={null}>
+              <WestEastPacePriorityPanel />
+            </Panel>
             <Panel title="Projected starter / bench unit pace" error={null}>
               <RotationPanel />
             </Panel>

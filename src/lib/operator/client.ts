@@ -273,6 +273,82 @@ export interface NbaScheduleFatigueResult {
   }
 }
 
+export interface NbaWestEastPacePlayer {
+  player_name: string
+  team: string
+  opponent_team: string
+  conference_direction: 'West -> East' | 'Unknown'
+  status: 'HIGH PRIORITY' | 'Unknown'
+  color: 'green' | 'neutral'
+  review_priority: number
+  schedule_pace_delta: number | null
+  opponent_pace: number | null
+  league_average_pace: number | null
+  pace_increase_vs_league_average_pct: number | null
+  lineup_coverage: {
+    complete: boolean
+    projected_minutes: number | null
+    starter_status_known: boolean
+    is_starter: boolean | null
+  }
+  source_freshness: Record<string, {
+    status: 'fresh' | 'stale' | 'missing' | 'future'
+    observed_at: string | null
+    age_hours: number | null
+    fresh: boolean
+  }>
+  confidence: 'high' | 'unknown'
+  fail_closed_reasons: string[]
+  projection_coefficient_pct: 0
+  automatic_projection_adjustment: false
+}
+
+export interface NbaWestEastPaceResult {
+  indicator: {
+    key: 'nba_west_to_east_pace_priority'
+    display_name: string
+    formula_version: string
+    preview_only: true
+    production_eligible: false
+    projection_coefficient_pct: 0
+    automatic_projection_adjustment: false
+    backtest: {
+      study: string
+      report_path: string
+      recommended_coefficient_pct: 0
+      verdict: string
+    }
+    owner_observation: {
+      game_date: string
+      team: string
+      conference_direction: string
+      observation: string
+      evidence_role: string
+      causal_status: string
+    }
+  }
+  game_date: string
+  generated_at: string
+  summary: {
+    players_evaluated: number
+    high_priority_players: number
+    coefficient_changed: false
+  }
+  players: NbaWestEastPacePlayer[]
+  outcome_tracking: {
+    status: 'ongoing'
+    unit: string
+    dimensions: string[]
+    promotion_rule: string
+  }
+  isolation: {
+    preview_only: true
+    production_eligible: false
+    selection_mutated: false
+    projection_mutated: false
+  }
+}
+
 export interface IndicatorConfig {
   id: string
   name: string
