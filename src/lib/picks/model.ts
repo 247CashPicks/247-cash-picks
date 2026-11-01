@@ -1,11 +1,14 @@
 import type { ProjectionInputs, ProjectionOutputs } from './types'
 
 export const LEAGUE_DEFAULTS = {
-  pace:         99.3,
-  defRating:    115.5,
-  rebsAllowed:  43.9,
-  rebsPer36:    6.69,
-  astAllowed:   26.6,
+  // Completed 2025-26 NBA regular-season baselines. Provenance:
+  // docs/nba_2025_26_final_baselines.md. Never blend these with 2026-27
+  // preseason/current-season partial results.
+  pace:         100.2,
+  defRating:    114.7,
+  rebsAllowed:  43.8,
+  rebsPer36:    6.53,
+  astAllowed:   26.7,
   matchupShare: 0.3,
 }
 

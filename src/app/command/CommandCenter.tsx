@@ -11,6 +11,15 @@ import {
   AuditDrawer, ComparePanel, ConfigsPanel, IndicatorsPanel, PromotePanel,
   RunHealthPanel, SlatePanel, LineRanksPanel, Panel,
 } from './panels'
+import ScenarioPanel from './ScenarioPanel'
+import RotationPanel from './RotationPanel'
+import UsageDifferentialPanel from './UsageDifferentialPanel'
+import ScheduleFatiguePanel from './ScheduleFatiguePanel'
+import CareerReboundingPanel from './CareerReboundingPanel'
+import DefensiveImpactPanel from './DefensiveImpactPanel'
+import NationalTvPanel from './NationalTvPanel'
+import WagerConcentrationPanel from './WagerConcentrationPanel'
+import WestEastPacePriorityPanel from './WestEastPacePriorityPanel'
 
 /**
  * One page, six panels, a league switcher, and an audit drawer.
@@ -167,6 +176,37 @@ export default function CommandCenter({
           <Panel title="PFF line ranks" error={null}>
             <LineRanksPanel schedule={scheduleContext} onChanged={refresh} />
           </Panel>
+        )}
+        {league === 'NBA' && (
+          <>
+            <Panel title="West-to-East pace-up — owner high priority" error={null}>
+              <WestEastPacePriorityPanel />
+            </Panel>
+            <Panel title="Projected starter / bench unit pace" error={null}>
+              <RotationPanel />
+            </Panel>
+            <Panel title="Offseason usage-load differential" error={null}>
+              <UsageDifferentialPanel />
+            </Panel>
+            <Panel title="Projection scenario sandbox" error={null}>
+              <ScenarioPanel />
+            </Panel>
+            <Panel title="Career rebound reference / matchup context" error={null}>
+              <CareerReboundingPanel />
+            </Panel>
+            <Panel title="Defensive EPM matchup exposure" error={null}>
+              <DefensiveImpactPanel />
+            </Panel>
+            <Panel title="National TV caution / broadcast evidence" error={null}>
+              <NationalTvPanel onChanged={refreshLive} />
+            </Panel>
+            <Panel title="Historical schedule-fatigue review" error={null}>
+              <ScheduleFatiguePanel />
+            </Panel>
+            <Panel title="Chalk / wager concentration" error={null}>
+              <WagerConcentrationPanel />
+            </Panel>
+          </>
         )}
       </main>
 

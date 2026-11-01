@@ -97,8 +97,8 @@ export default function JoinPage() {
           <a href="/" style={{ textDecoration: 'none' }}>
             <div style={{ fontFamily: F.mono, fontSize: '13px', fontWeight: 500, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
               <span className="cursor-blink" style={{ color: C.signalCyan, marginRight: '2px' }}>▌</span>
-              <span style={{ color: C.platinum }}>THE_ANALYTICS_</span>
-              <span style={{ color: C.signalCyan }}>COMMUNITY</span>
+              <span style={{ color: C.platinum }}>247_SPORTS_</span>
+              <span style={{ color: C.signalCyan }}>INTEL</span>
             </div>
           </a>
           <div style={{ display: 'flex', gap: '28px' }}>

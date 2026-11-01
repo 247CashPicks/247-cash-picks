@@ -14,6 +14,7 @@ import { editionLabel, formatBriefingRange, type Briefing } from '@/lib/briefing
 import { operatorFetch, type IndicatorsResponse } from '@/lib/operator/client'
 import { latestLiveProjections } from '@/lib/picks/projections'
 import { addCalendarDays, easternToday, PLATFORM_TIME_ZONE } from '@/lib/time/eastern'
+import { marketSourcePolicy } from '@/lib/market-source-policy'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,6 +153,7 @@ export default async function DashboardPage() {
   // acting on.
   const headline = new Map<string, typeof lines[number]>()
   for (const l of lines) {
+    if (!marketSourcePolicy(l.platform).executionEligible) continue
     const key = `${l.player_name}\u0000${l.game_date}`
     if (sport === 'NBA') {
       if (l.stat_type === 'pts') headline.set(key, l)
@@ -174,6 +176,7 @@ export default async function DashboardPage() {
       ...p,
       _edgePct: edge,
       _headlineStat: h?.stat_type ?? null,
+      _marketEligible: h != null,
       _excludedByGuard: implausibleEdgePct == null
         ? null : edge != null && Math.abs(edge) >= implausibleEdgePct,
     }

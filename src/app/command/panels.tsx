@@ -1,12 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   AgentHealthRow, AuditEntry, CompareResponse, Indicator, IndicatorConfig,
   IndicatorsResponse, OperatorMe, StagedSelection,
   StagedSlateResponse, PreviewRunResponse, NflScheduleContext,
-  ConfirmSelectionsResponse, ExternalLineRanksResponse,
+  ConfirmSelectionsResponse, ExternalLineRanksResponse, WagerConcentrationRow,
 } from '@/lib/operator/client'
+import { ReboundContextBadge } from './CareerReboundingPanel'
+import { DefensiveImpactBadge } from './DefensiveImpactPanel'
+import { WagerCautionBadge } from './WagerConcentrationPanel'
+import { NationalTvBadge } from './NationalTvPanel'
+import { isCompareResponse, isPreviewRunResponse } from '@/lib/operator/preview-response'
 import { easternToday } from '@/lib/time/eastern'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
@@ -191,11 +196,18 @@ export function IndicatorsPanel({ data, editing, onChanged }: {
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--steel)',
                                   marginTop: '2px' }}>{i.description}</div>
+                    {i.runtime_only && <div style={{ ...mono, marginTop: '4px',
+                      fontSize: '10px', color: 'var(--blue)' }}>
+                      {i.formula_version && `FORMULA ${i.formula_version} · `}
+                      {i.unit?.toUpperCase()} ·{' '}
+                      {(i.applicability ?? []).map((a) => a.comparison).join(' · ')}
+                    </div>}
                     <VerdictChip i={i} />
                   </td>
                   <td style={{ ...td, ...num, width: '14%' }}>
                     <span style={{ color: 'var(--steel-bright)' }}>
-                      {typeof i.value === 'boolean'
+                      {i.runtime_only ? 'COMPUTED PER MATCHUP'
+                        : typeof i.value === 'boolean'
                         ? (i.value ? 'ON' : 'OFF') : i.value}
                     </span>
                     {i.min_value !== null && (
@@ -231,6 +243,14 @@ function IndicatorControl({ i, editable, busy, onSet }: {
   onSet: (v: boolean | number) => void
 }) {
   const [draft, setDraft] = useState<string>(String(i.value))
+
+  if (i.runtime_only) {
+    return (
+      <span style={{ ...mono, fontSize: '10px', color: 'var(--steel)' }}>
+        runtime observation — not configurable
+      </span>
+    )
+  }
 
   if (!i.toggleable) {
     return (
@@ -379,6 +399,15 @@ export function ConfigsPanel({ league, configs, selected, onSelect, onChanged }:
 
 // ── 3. Preview → Compare ────────────────────────────────────────────────────
 
+function readinessBlocked(value: {
+  status?: unknown; publishing_blocked?: unknown
+  ready_for_review?: unknown; reason?: unknown
+}) {
+  return ['partial', 'error', 'failed'].includes(String(value.status))
+    || value.publishing_blocked === true || value.ready_for_review === false
+    || value.reason === 'pregame_snapshot_incomplete'
+}
+
 export function ComparePanel({ league, config, compare, error, schedule,
                               onCompare, onError }: {
   league: string
@@ -402,6 +431,11 @@ export function ComparePanel({ league, config, compare, error, schedule,
   const [season, setSeason] = useState(schedule?.season != null ? String(schedule.season) : '')
   const [ran, setRan] = useState<PreviewRunResponse | null>(null)
   const [busy, setBusy] = useState<'run' | 'compare' | null>(null)
+  const [comparisonFailure, setComparisonFailure] = useState<string | null>(null)
+  const runBlocked = ran !== null && readinessBlocked(ran)
+  const captureFailed = ran?.reason === 'pregame_snapshot_incomplete'
+  const compareBlocked = runBlocked || comparisonFailure !== null
+    || (ran !== null && !ran.dates_previewed?.length)
 
   if (!config) {
     return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
@@ -433,30 +467,65 @@ export function ComparePanel({ league, config, compare, error, schedule,
   }
 
   async function call(kind: 'run' | 'compare') {
+    if (kind === 'compare' && compareBlocked) return
     setBusy(kind); onError(null)
+    onCompare(null)
+    if (kind === 'run') { setRan(null); setComparisonFailure(null) }
     const w = compareWindow()
     const url = kind === 'run'
       ? `/api/operator/indicator-configs/${config!.id}/preview-run`
       : `/api/operator/indicator-configs/${config!.id}/compare?start_date=${w.start}&end_date=${w.end}`
-    const res = await fetch(url, kind === 'run'
-      ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(runBody()) }
-      : { cache: 'no-store' })
-    setBusy(null)
+    let res: Response
+    try {
+      res = await fetch(url, kind === 'run'
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(runBody()) }
+        : { cache: 'no-store' })
+    } catch {
+      const message = kind === 'compare'
+        ? 'Comparison readiness could not be verified. No comparison is ready for review.'
+        : 'The preview request failed. No new preview is ready for review.'
+      setBusy(null)
+      if (kind === 'compare') setComparisonFailure(message)
+      onError(message); return
+    }
     const body = await res.json().catch(() => null)
+    setBusy(null)
     if (!res.ok) {
       // Includes the 409 "run a preview first" — shown as the API's own
       // message, never as an empty table.
       onError(typeof body?.detail === 'string' ? body.detail
               : body?.detail?.error ?? `Failed (${res.status})`)
+      if (kind === 'compare') setComparisonFailure(
+        typeof body?.detail === 'string' ? body.detail
+          : body?.detail?.error ?? `Comparison unavailable (${res.status}).`)
       return
     }
-    if (kind === 'compare') { onCompare(body as CompareResponse); return }
+    if (kind === 'compare') {
+      if (!body || readinessBlocked(body)) {
+        const message = 'Comparison is blocked: the latest preview is incomplete or not ready for review.'
+        setComparisonFailure(message); onError(message); return
+      }
+      if (!isCompareResponse(body) || body.league !== league || body.config_id !== config!.id) {
+        const message = 'Comparison unavailable: the server did not return a ready preview comparison.'
+        setComparisonFailure(message); onError(message); return
+      }
+      setComparisonFailure(null)
+      onCompare(body); return
+    }
 
-    const run = body as PreviewRunResponse
+    if (!isPreviewRunResponse(body) || body.league !== league || body.config_id !== config!.id) {
+      const message = 'The preview response was invalid. No new preview is ready for review; Compare is blocked.'
+      setRan(null); setComparisonFailure(message); onError(message); return
+    }
+    const run = body
     setRan(run)
     onCompare(null)
-    if (!run.dates_previewed?.length) {
+    if (readinessBlocked(run)) {
+      onError(run.reason === 'pregame_snapshot_incomplete'
+        ? 'Pregame snapshot capture failed. The preview is incomplete and Compare is blocked.'
+        : 'The preview is incomplete or not ready for review. Compare is blocked.')
+    } else if (!run.dates_previewed?.length) {
       onError('The preview ran but projected nothing — no games in that '
               + 'window, or no player rows yet. Compare would have nothing '
               + 'to read.')
@@ -497,7 +566,7 @@ export function ComparePanel({ league, config, compare, error, schedule,
         )}
         <button type="button" disabled={busy !== null} onClick={() => call('run')}
           style={btn}>{busy === 'run' ? 'RUNNING…' : 'RUN PREVIEW'}</button>
-        <button type="button" disabled={busy !== null} onClick={() => call('compare')}
+        <button type="button" disabled={busy !== null || compareBlocked} onClick={() => call('compare')}
           style={btn}>{busy === 'compare' ? 'COMPARING…' : 'COMPARE'}</button>
       </div>
 
@@ -509,7 +578,17 @@ export function ComparePanel({ league, config, compare, error, schedule,
         </p>
       )}
 
-      {ran && (
+      {ran && runBlocked && (
+        <p role="alert" style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
+                                color: 'var(--alert)' }}>
+          PREVIEW INCOMPLETE — {captureFailed ? 'PREGAME SNAPSHOT CAPTURE FAILED' : 'REVIEW BLOCKED'}.
+          {' '}COMPARE DISABLED.
+          {ran.dates_previewed?.length
+            ? ` Completed dates: ${ran.dates_previewed.join(', ')}; the requested run is incomplete.`
+            : ' No dates are ready for review.'}
+        </p>
+      )}
+      {ran && !runBlocked && comparisonFailure === null && busy === null && (
         <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
                     color: ran.dates_previewed?.length ? 'var(--lime)'
                                                        : 'var(--amber)' }}>
@@ -521,8 +600,10 @@ export function ComparePanel({ league, config, compare, error, schedule,
 
       {error && <p role="alert" style={{ fontSize: '12px', color: 'var(--alert)' }}>
         {error}</p>}
+      {comparisonFailure && !error && <p role="alert"
+        style={{ fontSize: '12px', color: 'var(--alert)' }}>{comparisonFailure}</p>}
 
-      {compare && (
+      {compare && !compareBlocked && busy === null && (
         <>
           <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
                       color: 'var(--steel)' }}>
@@ -883,6 +964,25 @@ export function stagedSlateHeading(slate: StagedSlateResponse): string {
     : `${slate.league} · ${range}`
 }
 
+function marketIdentity(value: string) {
+  return value.toLocaleLowerCase().replace(/^player_/, '').replace(/[^a-z0-9]/g, '')
+}
+
+export function matchingWagerRow(
+  selection: StagedSelection, rows: WagerConcentrationRow[],
+): WagerConcentrationRow | null {
+  const player = selection.player_name.trim().toLocaleLowerCase()
+  const stat = marketIdentity(selection.stat_type)
+  const direction = selection.direction.trim().toLocaleLowerCase()
+  return rows.find(row => row.status === 'ready'
+    && row.game_date === selection.game_date
+    && row.player_name.trim().toLocaleLowerCase() === player
+    && (marketIdentity(row.market_key).includes(stat)
+      || stat.includes(marketIdentity(row.market_key)))
+    && row.line === selection.line
+    && row.side.trim().toLocaleLowerCase() === direction) ?? null
+}
+
 export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined }: {
   slate: StagedSlateResponse
   isOwner?: boolean
@@ -893,6 +993,30 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [wagerRows, setWagerRows] = useState<WagerConcentrationRow[]>([])
+
+  useEffect(() => {
+    if (slate.league !== 'NBA' || selections.length === 0) return
+    const controller = new AbortController()
+    const dates = [...new Set(selections.map(selection => selection.game_date))]
+    async function load() {
+      try {
+        const responses = await Promise.all(dates.map(date => fetch(
+          `/api/operator/nba-wager-concentration/results?slate=${encodeURIComponent(date)}`,
+          { cache: 'no-store', signal: controller.signal })))
+        const packets = await Promise.all(responses.map(async response => response.ok
+          ? response.json() as Promise<{ rows?: WagerConcentrationRow[] }>
+          : { rows: [] }))
+        setWagerRows(packets.flatMap(packet => packet.rows ?? []))
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+          setWagerRows([])
+        }
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [slate.league, selections])
 
   async function confirm() {
     if (!isOwner || selected.length === 0) return
@@ -933,8 +1057,9 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
               {h}</th>))}
         </tr></thead>
         <tbody>
-          {selections.map((s) => (
-            <tr key={s.id}>
+          {selections.map((s) => {
+            const wagerRow = matchingWagerRow(s, wagerRows)
+            return <tr key={s.id}>
               <td style={td}>
                 {isOwner && s.status === 'pending' ? (
                   <input type="checkbox" aria-label={`Select ${s.player_name}`}
@@ -950,6 +1075,11 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
                   {s.provenance.config_name ?? 'no config'}
                   {s.provenance.agent_run_short && ` · run ${s.provenance.agent_run_short}`}
                 </div>
+                <ReboundContextBadge value={s.rebound_context} />
+                <DefensiveImpactBadge value={s.defensive_impact_context} />
+                {slate.league === 'NBA' && <NationalTvBadge
+                  value={s.national_tv_context} playerName={s.player_name} />}
+                <WagerCautionBadge row={wagerRow} />
               </td>
               <td style={{ ...td, ...mono, fontSize: '10px',
                            letterSpacing: '0.06em',
@@ -965,7 +1095,7 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
                            color: s.line_pulled ? 'var(--alert)' : 'var(--steel)' }}>
                 {s.line_pulled ? 'PULLED' : '—'}</td>
             </tr>
-          ))}
+          })}
         </tbody>
       </table>
       <div style={{ padding: '10px var(--pad)', display: 'flex', gap: '10px',

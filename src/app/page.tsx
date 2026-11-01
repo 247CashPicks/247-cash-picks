@@ -90,8 +90,8 @@ export default function LandingPage() {
         {/* Wordmark */}
         <div style={{ fontFamily: F.mono, fontSize: '13px', fontWeight: 500, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
           <span className="cursor-blink" style={{ color: C.signalCyan, marginRight: '2px' }}>▌</span>
-          <span style={{ color: C.platinum }}>THE_ANALYTICS_</span>
-          <span style={{ color: C.signalCyan }}>COMMUNITY</span>
+          <span style={{ color: C.platinum }}>247_SPORTS_</span>
+          <span style={{ color: C.signalCyan }}>INTEL</span>
         </div>
 
         {/* Nav links */}
@@ -610,7 +610,7 @@ export default function LandingPage() {
             color: C.muted, lineHeight: 1.65,
             margin: '0 0 52px', maxWidth: '560px',
           }}>
-            The Analytics Community is a private membership for serious NBA analysts.
+            247 Sports Intel is a private membership for serious sports analysts.
             Access to the engine is granted by tier — from published signals through full
             model operator access with backtesting and raw data export.
           </p>
@@ -706,8 +706,8 @@ export default function LandingPage() {
                 fontFamily: F.mono, fontSize: '13px', fontWeight: 500,
                 letterSpacing: '0.04em', marginBottom: '8px',
               }}>
-                <span style={{ color: C.platinum }}>▌ THE_ANALYTICS_</span>
-                <span style={{ color: C.signalCyan }}>COMMUNITY</span>
+                <span style={{ color: C.platinum }}>▌ 247_SPORTS_</span>
+                <span style={{ color: C.signalCyan }}>INTEL</span>
               </div>
               <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
                 {BRAND.domain}
@@ -769,7 +769,7 @@ export default function LandingPage() {
             alignItems: 'center', flexWrap: 'wrap', gap: '12px',
           }}>
             <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
-              © 2025 The Analytics Community
+              © 2026 247 Sports Intel LLC
             </div>
             <div style={{ fontFamily: F.mono, fontSize: '11px', color: C.faint }}>
               {BRAND.supportEmail}

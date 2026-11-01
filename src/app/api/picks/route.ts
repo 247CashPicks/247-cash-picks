@@ -10,6 +10,7 @@ import { projectionForStat, isProjectedStat } from '@/lib/picks/stats'
 import type { TierSlug } from '@/lib/picks/types'
 import { visible_selections } from '@/lib/picks/visible_selections'
 import { easternToday } from '@/lib/time/eastern'
+import { marketSourcePolicy } from '@/lib/market-source-policy'
 
 // GET /api/picks?date=2026-05-12
 // Returns the league-native published window, filtered to subscriber tier.
@@ -40,11 +41,14 @@ export async function GET(req: NextRequest) {
   const filtered = (data || []).filter(pick =>
     canAccess(tier, pick.tier_required as TierSlug)
   )
+  const eligible = filtered.filter(pick =>
+    marketSourcePolicy(pick.platform).executionEligible
+  )
 
   // Core cap: 3 picks max
-  const picks = tier === 'core' ? filtered.slice(0, 3) : filtered
+  const picks = tier === 'core' ? eligible.slice(0, 3) : eligible
 
-  return NextResponse.json({ picks, tier, total: data.length })
+  return NextResponse.json({ picks, tier, total: eligible.length })
 }
 
 // POST /api/picks — operator actions (add to selections, publish all)
@@ -53,6 +57,7 @@ export async function POST(req: NextRequest) {
   // here; the owner-only /command flow owns that decision end to end.
   const denied = await guardOperatorRoute()
   if (denied) return denied
+  const { userId: operatorUserId } = await auth()
 
   const body = await req.formData().catch(() => null)
   const jsonBody = body ? null : await req.json().catch(() => null)
@@ -90,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Projection not found' }, { status: 404 })
   }
 
-  const { data: line } = await supabase
+  const { data: candidateLines } = await supabase
     .from('picks_lines')
     .select('*')
     .eq('brand_id', BRAND.slug)
@@ -101,8 +106,38 @@ export async function POST(req: NextRequest) {
     // and the whole add failed. Same defect the backend selector carried.
     .eq('game_date', proj.game_date)
     .order('edge_pct', { ascending: false })
-    .limit(1)
-    .single()
+    .limit(100)
+
+  const blockedLines = (candidateLines || []).filter(candidate =>
+    !marketSourcePolicy(candidate.platform).executionEligible
+  )
+  const line = (candidateLines || []).find(candidate =>
+    marketSourcePolicy(candidate.platform).executionEligible
+  )
+
+  if (blockedLines.length > 0) {
+    await supabase.from('picks_indicator_audit').insert({
+      brand_id: BRAND.slug,
+      config_id: null,
+      indicator_key: 'wagering_source_policy',
+      event: 'preview_run',
+      old_value: null,
+      new_value: {
+        diagnostic: 'wagering_source_execution_blocked',
+        source: marketSourcePolicy(blockedLines[0].platform).source,
+        classification: marketSourcePolicy(blockedLines[0].platform).classification,
+        operation: 'manual_ranking_excluded',
+        context: {
+          projection_id: projectionId,
+          player_name: playerName,
+          rows_blocked: blockedLines.length,
+        },
+        policy_version: marketSourcePolicy(blockedLines[0].platform).policyVersion,
+      },
+      actor: operatorUserId || 'operator_route',
+      note: marketSourcePolicy(blockedLines[0].platform).label,
+    })
+  }
 
   // Was: stat_type 'pts', line/our_projection from proj.proj_pts. All three
   // are NBA-only. Under NFL proj_pts is NULL, and picks_selections
@@ -114,8 +149,33 @@ export async function POST(req: NextRequest) {
   // mapping the backend's lines agent uses.
   if (!line?.stat_type) {
     return NextResponse.json(
-      { error: 'No market line for this player, so there is no stat to stage '
-             + 'against. Run the lines agent first.' }, { status: 409 })
+      { error: 'No eligible market line for this player, so there is no stat '
+             + 'to stage against. Run the lines agent first.' }, { status: 409 })
+  }
+
+  const sourcePolicy = marketSourcePolicy(line.platform)
+  if (!sourcePolicy.executionEligible) {
+    await supabase.from('picks_indicator_audit').insert({
+      brand_id: BRAND.slug,
+      config_id: null,
+      indicator_key: 'wagering_source_policy',
+      event: 'preview_run',
+      old_value: null,
+      new_value: {
+        diagnostic: 'wagering_source_execution_blocked',
+        source: sourcePolicy.source,
+        classification: sourcePolicy.classification,
+        operation: 'manual_stage_blocked',
+        context: { projection_id: projectionId, player_name: playerName },
+        policy_version: sourcePolicy.policyVersion,
+      },
+      actor: operatorUserId || 'operator_route',
+      note: sourcePolicy.label,
+    })
+    return NextResponse.json({
+      error: `${line.platform || 'This source'} is not an approved execution venue.`,
+      source_policy: sourcePolicy,
+    }, { status: 409 })
   }
 
   const ourProjection = projectionForStat(proj, line.stat_type)

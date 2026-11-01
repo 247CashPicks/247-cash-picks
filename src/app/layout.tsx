@@ -27,32 +27,32 @@ export default async function RootLayout({
   const sport = await getSport()
 
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <head>
-          <link rel="preconnect" href="https://fonts.googleapis.com" />
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-          <link
-            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap"
-            rel="stylesheet"
-          />
-        </head>
-        <body
-          style={{
-            margin: 0,
-            padding: 0,
-            background: '#000000',
-            color: '#C0CCD6',
-            fontFamily: "'IBM Plex Sans', sans-serif",
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            minHeight: '100vh',
-          }}
-        >
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body
+        style={{
+          margin: 0,
+          padding: 0,
+          background: '#000000',
+          color: '#C0CCD6',
+          fontFamily: "'IBM Plex Sans', sans-serif",
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+          minHeight: '100vh',
+        }}
+      >
+        <ClerkProvider>
           <SiteNav sport={sport} />
           {children}
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   )
 }

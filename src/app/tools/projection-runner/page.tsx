@@ -15,14 +15,14 @@ const DEFAULT_INPUTS: ProjectionInputs = {
   projectedMinutes: 32,
   per36: { pts: 24.0, reb: 6.0, ast: 5.0 },
   lineupAdjApplied: false,
-  opponentPace: 99.3,
-  individualPace: 99.3,
-  opponentDefRating: 115.5,
-  individualDefRating: 115.5,
-  oppRebsAllowed: 43.9,
-  indivRebsPer36: 6.69,
-  oppAstAllowed: 26.6,
-  matchupShare: 0.3,
+  opponentPace: LEAGUE_DEFAULTS.pace,
+  individualPace: LEAGUE_DEFAULTS.pace,
+  opponentDefRating: LEAGUE_DEFAULTS.defRating,
+  individualDefRating: LEAGUE_DEFAULTS.defRating,
+  oppRebsAllowed: LEAGUE_DEFAULTS.rebsAllowed,
+  indivRebsPer36: LEAGUE_DEFAULTS.rebsPer36,
+  oppAstAllowed: LEAGUE_DEFAULTS.astAllowed,
+  matchupShare: LEAGUE_DEFAULTS.matchupShare,
 }
 
 function InputRow({

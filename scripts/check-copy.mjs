@@ -58,6 +58,23 @@ const ALLOWLIST = [
   // Source-code comment recording where the NFL stat vocabulary comes from, so
   // the frontend map stays in step with the backend. A comment, never shipped.
   { re: /agents\/picks_lines\.py/, why: 'dev comment citing backend module' },
+  // Exact title of the new protected operator-only diagnostic. This is not
+  // customer-facing promotional copy; it names the market-risk evidence that
+  // an authenticated operator is reviewing before approving projections.
+  { re: /title="Chalk \/ wager concentration"/,
+    why: 'protected operator diagnostic title' },
+  // Internal API path used to attach the same protected diagnostic to an exact
+  // operator slate row. It is code, not rendered customer-facing copy.
+  { re: /\/api\/operator\/nba-wager-concentration\/results/,
+    why: 'protected operator diagnostic API path' },
+]
+
+const FILE_ALLOWLIST = [
+  // This entire authenticated Command Center panel is the documented exception
+  // for inspecting licensed market-concentration evidence. It is never rendered
+  // on a public, pricing, checkout, or recommendation surface.
+  { file: 'src/app/command/WagerConcentrationPanel.tsx',
+    why: 'protected operator-only market-risk diagnostic' },
 ]
 
 const violations = []
@@ -74,6 +91,7 @@ function walk(dir) {
 
 function scan(file) {
   const rel = relative(ROOT, file)
+  if (FILE_ALLOWLIST.some(a => a.file === rel)) return
   const lines = readFileSync(file, 'utf8').split('\n')
   lines.forEach((line, i) => {
     if (ALLOWLIST.some(a => a.re.test(line))) return
