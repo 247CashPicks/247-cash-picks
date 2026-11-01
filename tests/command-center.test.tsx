@@ -432,6 +432,36 @@ describe('preview window', () => {
     expect(body.season).toBe('2026')
   })
 
+  it.each([
+    { name: 'mixed window', dates: ['2026-11-01'] },
+    { name: 'all captures failed', dates: [] },
+  ])('blocks review and comparison when $name has incomplete pregame snapshots', async ({ dates }) => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200,
+      json: async () => ({ status: 'partial', publishing_blocked: true,
+        ready_for_review: false, reason: 'pregame_snapshot_incomplete',
+        dates_previewed: dates, window: dates.length ? { start: '2026-11-01', end: '2026-11-01' } : null,
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const onError = vi.fn()
+    const onCompare = vi.fn()
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={COMPARE} error={null} schedule={null}
+      onCompare={onCompare} onError={onError} />)
+    fireEvent.click(screen.getByText('RUN PREVIEW'))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('PREGAME SNAPSHOT CAPTURE FAILED')
+    expect(alert.textContent).toContain('COMPARE DISABLED')
+    expect(screen.queryByText(/^PREVIEWED/)).toBeNull()
+    expect(screen.queryByText(/^WINDOW /)).toBeNull()
+    const compareButton = screen.getByRole('button', { name: 'COMPARE' }) as HTMLButtonElement
+    expect(compareButton.disabled).toBe(true)
+    fireEvent.click(compareButton)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(onCompare).toHaveBeenCalledWith(null)
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('Compare is blocked'))
+  })
+
   it('warns when the preview covered less than was requested', () => {
     /* The defect this whole change exists for: a one-day preview under a
        six-day heading read as a week's verdict. */

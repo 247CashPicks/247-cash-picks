@@ -456,6 +456,9 @@ export interface AgentHealthRow {
  *  here rather than re-deriving it in the browser. */
 export interface PreviewRunResponse {
   status: string
+  publishing_blocked?: boolean
+  ready_for_review?: boolean
+  reason?: string | null
   league: string
   config_id: string
   run_kind: string

@@ -421,6 +421,11 @@ export function ComparePanel({ league, config, compare, error, schedule,
   const [season, setSeason] = useState(schedule?.season != null ? String(schedule.season) : '')
   const [ran, setRan] = useState<PreviewRunResponse | null>(null)
   const [busy, setBusy] = useState<'run' | 'compare' | null>(null)
+  const runBlocked = ran !== null && (ran.status === 'partial'
+    || ran.publishing_blocked === true || ran.ready_for_review === false
+    || ran.reason === 'pregame_snapshot_incomplete')
+  const captureFailed = ran?.reason === 'pregame_snapshot_incomplete'
+  const compareBlocked = runBlocked || (ran !== null && !ran.dates_previewed?.length)
 
   if (!config) {
     return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
@@ -452,7 +457,9 @@ export function ComparePanel({ league, config, compare, error, schedule,
   }
 
   async function call(kind: 'run' | 'compare') {
+    if (kind === 'compare' && compareBlocked) return
     setBusy(kind); onError(null)
+    if (kind === 'run') { setRan(null); onCompare(null) }
     const w = compareWindow()
     const url = kind === 'run'
       ? `/api/operator/indicator-configs/${config!.id}/preview-run`
@@ -461,8 +468,8 @@ export function ComparePanel({ league, config, compare, error, schedule,
       ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(runBody()) }
       : { cache: 'no-store' })
-    setBusy(null)
     const body = await res.json().catch(() => null)
+    setBusy(null)
     if (!res.ok) {
       // Includes the 409 "run a preview first" — shown as the API's own
       // message, never as an empty table.
@@ -475,7 +482,12 @@ export function ComparePanel({ league, config, compare, error, schedule,
     const run = body as PreviewRunResponse
     setRan(run)
     onCompare(null)
-    if (!run.dates_previewed?.length) {
+    if (run.status === 'partial' || run.publishing_blocked === true
+        || run.ready_for_review === false || run.reason === 'pregame_snapshot_incomplete') {
+      onError(run.reason === 'pregame_snapshot_incomplete'
+        ? 'Pregame snapshot capture failed. The preview is incomplete and Compare is blocked.'
+        : 'The preview is incomplete or not ready for review. Compare is blocked.')
+    } else if (!run.dates_previewed?.length) {
       onError('The preview ran but projected nothing — no games in that '
               + 'window, or no player rows yet. Compare would have nothing '
               + 'to read.')
@@ -516,7 +528,7 @@ export function ComparePanel({ league, config, compare, error, schedule,
         )}
         <button type="button" disabled={busy !== null} onClick={() => call('run')}
           style={btn}>{busy === 'run' ? 'RUNNING…' : 'RUN PREVIEW'}</button>
-        <button type="button" disabled={busy !== null} onClick={() => call('compare')}
+        <button type="button" disabled={busy !== null || compareBlocked} onClick={() => call('compare')}
           style={btn}>{busy === 'compare' ? 'COMPARING…' : 'COMPARE'}</button>
       </div>
 
@@ -528,7 +540,17 @@ export function ComparePanel({ league, config, compare, error, schedule,
         </p>
       )}
 
-      {ran && (
+      {ran && runBlocked && (
+        <p role="alert" style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
+                                color: 'var(--alert)' }}>
+          PREVIEW INCOMPLETE — {captureFailed ? 'PREGAME SNAPSHOT CAPTURE FAILED' : 'REVIEW BLOCKED'}.
+          {' '}COMPARE DISABLED.
+          {ran.dates_previewed?.length
+            ? ` Completed dates: ${ran.dates_previewed.join(', ')}; the requested run is incomplete.`
+            : ' No dates are ready for review.'}
+        </p>
+      )}
+      {ran && !runBlocked && (
         <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
                     color: ran.dates_previewed?.length ? 'var(--lime)'
                                                        : 'var(--amber)' }}>
@@ -541,7 +563,7 @@ export function ComparePanel({ league, config, compare, error, schedule,
       {error && <p role="alert" style={{ fontSize: '12px', color: 'var(--alert)' }}>
         {error}</p>}
 
-      {compare && (
+      {compare && !compareBlocked && (
         <>
           <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
                       color: 'var(--steel)' }}>
