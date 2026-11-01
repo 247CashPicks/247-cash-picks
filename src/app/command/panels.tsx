@@ -514,6 +514,14 @@ export function ComparePanel({ league, config, compare, error, schedule,
       onCompare(body as CompareResponse); return
     }
 
+    if (!body || typeof body !== 'object' || Array.isArray(body)
+        || typeof body.status !== 'string' || !Array.isArray(body.dates_previewed)
+        || !body.dates_previewed.every((day: unknown) => typeof day === 'string')
+        || (body.window !== null && (typeof body.window?.start !== 'string'
+          || typeof body.window?.end !== 'string'))) {
+      const message = 'The preview response was invalid. No new preview is ready for review; Compare is blocked.'
+      setRan(null); setComparisonFailure(message); onError(message); return
+    }
     const run = body as PreviewRunResponse
     setRan(run)
     onCompare(null)

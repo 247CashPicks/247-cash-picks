@@ -559,6 +559,33 @@ describe('preview window', () => {
     expect((screen.getByRole('button', { name: 'COMPARE' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it.each(['null', 'not valid JSON', '{"status":"success","dates_previewed":"2026-11-01"}'])(
+    'fails closed for malformed HTTP 200 run response %s without retaining prior success', async (invalidBody) => {
+      const response = (body: string) => new Response(body, {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(response(JSON.stringify({ status: 'success',
+          dates_previewed: ['2026-11-01'], window: { start: '2026-11-01', end: '2026-11-01' } })))
+        .mockResolvedValueOnce(response(invalidBody))
+      vi.stubGlobal('fetch', fetchMock)
+      const onCompare = vi.fn()
+      const onError = vi.fn()
+      render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+        compare={COMPARE} error={null} schedule={null} onCompare={onCompare} onError={onError} />)
+      fireEvent.click(screen.getByRole('button', { name: 'RUN PREVIEW' }))
+      await screen.findByText('PREVIEWED 2026-11-01')
+      fireEvent.click(screen.getByRole('button', { name: 'RUN PREVIEW' }))
+      expect((await screen.findByRole('alert')).textContent).toContain('The preview response was invalid')
+      expect(screen.queryByText(/^PREVIEWED/)).toBeNull()
+      expect(screen.queryByText(/^WINDOW /)).toBeNull()
+      expect(screen.queryByRole('button', { name: 'RUNNING…' })).toBeNull()
+      expect((screen.getByRole('button', { name: 'COMPARE' }) as HTMLButtonElement).disabled).toBe(true)
+      expect(onCompare).toHaveBeenLastCalledWith(null)
+      expect(onError).toHaveBeenLastCalledWith(expect.stringContaining('Compare is blocked'))
+    },
+  )
+
   it('warns when the preview covered less than was requested', () => {
     /* The defect this whole change exists for: a one-day preview under a
        six-day heading read as a week's verdict. */
