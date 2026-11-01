@@ -488,6 +488,7 @@ export interface StagedSlateResponse {
 
 export interface StagedSelection {
   id: string
+  game_id?: string | null
   player_name: string
   team: string | null
   stat_type: string
@@ -503,12 +504,63 @@ export interface StagedSelection {
   line_pulled: boolean
   rebound_context?: ReboundContextResult
   defensive_impact_context?: DefensiveImpactResult
+  national_tv_context?: NationalTvContext
   provenance: {
     config_id: string | null
     config_name: string | null
     agent_run_id: string | null
     agent_run_short: string | null
     snapshot_hash_short: string | null
+  }
+}
+
+export interface NationalTvContext {
+  status: 'ready' | 'unknown'
+  level: 'unknown' | 'none' | 'caution' | 'greater_caution'
+  color: 'gray' | 'yellow' | 'red'
+  icon: string
+  label: string
+  reasons: string[]
+  national: boolean | null
+  networks: string[]
+  game_id: string | null
+  game_date: string | null
+  tip_time: string | null
+  slate_game_count: number | null
+  distinct_start_windows: number | null
+  source: {
+    label: string
+    url: string
+    provider_terms_url: string
+    rights_reference: string
+    observed_at: string
+    retrieved_at: string
+    max_age_hours: number
+  } | null
+  snapshot_id: string | null
+  snapshot_sha256: string | null
+  computed_at: string | null
+  formula_version: string
+  preview_only: true
+  projection_mutated: false
+  selection_mutated: false
+  ranking_mutated: false
+  advisory_only: true
+}
+
+export interface SaveBroadcastResponse {
+  snapshot_id: string
+  snapshot_sha256: string
+  audit_saved: boolean
+  result: {
+    slate_date: string
+    status: 'ready' | 'unknown'
+    reasons: string[]
+    games: NationalTvContext[]
+    computed_at: string
+    formula_version: string
+    preview_only: true
+    advisory_only: true
   }
 }
 

@@ -17,6 +17,7 @@ import UsageDifferentialPanel from './UsageDifferentialPanel'
 import ScheduleFatiguePanel from './ScheduleFatiguePanel'
 import CareerReboundingPanel from './CareerReboundingPanel'
 import DefensiveImpactPanel from './DefensiveImpactPanel'
+import NationalTvPanel from './NationalTvPanel'
 import WagerConcentrationPanel from './WagerConcentrationPanel'
 import WestEastPacePriorityPanel from './WestEastPacePriorityPanel'
 
@@ -195,6 +196,9 @@ export default function CommandCenter({
             </Panel>
             <Panel title="Defensive EPM matchup exposure" error={null}>
               <DefensiveImpactPanel />
+            </Panel>
+            <Panel title="National TV caution / broadcast evidence" error={null}>
+              <NationalTvPanel onChanged={refreshLive} />
             </Panel>
             <Panel title="Historical schedule-fatigue review" error={null}>
               <ScheduleFatiguePanel />

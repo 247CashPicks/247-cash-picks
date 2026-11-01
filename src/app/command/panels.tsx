@@ -10,6 +10,7 @@ import type {
 import { ReboundContextBadge } from './CareerReboundingPanel'
 import { DefensiveImpactBadge } from './DefensiveImpactPanel'
 import { WagerCautionBadge } from './WagerConcentrationPanel'
+import { NationalTvBadge } from './NationalTvPanel'
 import { easternToday } from '@/lib/time/eastern'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
@@ -1014,6 +1015,8 @@ export function SlatePanel({ slate, isOwner = false, onChanged = () => undefined
                 </div>
                 <ReboundContextBadge value={s.rebound_context} />
                 <DefensiveImpactBadge value={s.defensive_impact_context} />
+                {slate.league === 'NBA' && <NationalTvBadge
+                  value={s.national_tv_context} playerName={s.player_name} />}
                 <WagerCautionBadge row={wagerRow} />
               </td>
               <td style={{ ...td, ...mono, fontSize: '10px',
