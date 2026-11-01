@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type {
   CompareResponse, Indicator, IndicatorConfig, IndicatorsResponse, OperatorMe,
+  PreviewRunResponse,
 } from '@/lib/operator/client'
 import {
   ComparePanel, IndicatorsPanel, Panel, PromotePanel, RunHealthPanel,
@@ -394,6 +395,26 @@ const COMPARE: CompareResponse = {
   staged_selection_changes: [],
 }
 
+function runResponse(overrides: Partial<PreviewRunResponse> = {}): PreviewRunResponse {
+  return {
+    status: 'success', league: 'NBA', config_id: 'cfg-1', run_kind: 'preview', actor: 'Fixture Operator',
+    requested_window: { start: '2026-11-01', end: '2026-11-01' },
+    window: { start: '2026-11-01', end: '2026-11-01' },
+    dates_previewed: ['2026-11-01'], results: [], ...overrides,
+  }
+}
+
+const NBA_COMPARE: CompareResponse = { ...COMPARE, league: 'NBA' }
+const COMPARE_ROW: CompareResponse['rows'][number] = {
+  player_name: 'Fixture Player', team: null, game_date: '2026-11-01', stat: 'points',
+  live_projection: null, preview_projection: 21, delta: 0, line: null,
+  live_edge_pct: null, preview_edge_pct: null, staged_selection_changes: false,
+}
+const COMPARE_CHANGE: CompareResponse['staged_selection_changes'][number] = {
+  player_name: 'Fixture Player', stat: 'points', game_date: '2026-11-01', status: 'pending',
+  staged_edge_pct: null, preview_edge_pct: null, direction_change: null,
+}
+
 describe('preview window', () => {
   const noop = () => {}
 
@@ -417,8 +438,9 @@ describe('preview window', () => {
   it('sends the week, not the first day of a range, for NFL', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true, status: 200,
-      json: async () => ({ status: 'success', dates_previewed: ['2026-09-13'],
-                           window: { start: '2026-09-13', end: '2026-09-14' } }),
+      json: async () => runResponse({ league: 'NFL', dates_previewed: ['2026-09-13'],
+        requested_window: { start: null, end: null },
+        window: { start: '2026-09-13', end: '2026-09-14' } }),
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<ComparePanel league="NFL" config={PREVIEW_CONFIG} compare={null}
@@ -437,7 +459,7 @@ describe('preview window', () => {
     { name: 'all captures failed', dates: [] },
   ])('blocks review and comparison when $name has incomplete pregame snapshots', async ({ dates }) => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200,
-      json: async () => ({ status: 'partial', publishing_blocked: true,
+      json: async () => runResponse({ status: 'partial', publishing_blocked: true,
         ready_for_review: false, reason: 'pregame_snapshot_incomplete',
         dates_previewed: dates, window: dates.length ? { start: '2026-11-01', end: '2026-11-01' } : null,
       }),
@@ -465,7 +487,7 @@ describe('preview window', () => {
   it.each([false, true])('clears stale comparison and green success on GET readiness rejection (prior run: %s)', async (priorRun) => {
     const fetchMock = vi.fn()
     if (priorRun) fetchMock.mockResolvedValueOnce({ ok: true, status: 200,
-      json: async () => ({ status: 'success', dates_previewed: ['2026-11-01'],
+      json: async () => runResponse({ status: 'success', dates_previewed: ['2026-11-01'],
         window: { start: '2026-11-01', end: '2026-11-01' } }),
     })
     fetchMock.mockResolvedValueOnce({ ok: false, status: 409,
@@ -519,15 +541,98 @@ describe('preview window', () => {
     expect(screen.queryByRole('button', { name: 'COMPARING…' })).toBeNull()
   })
 
+  it.each([
+    { name: 'empty nested objects', payload: { window: {}, dates_previewed: [], rows: [], summary: {} } },
+    { name: 'missing requested window', payload: { ...NBA_COMPARE, requested_window: undefined } },
+    { name: 'invalid window endpoint', payload: { ...NBA_COMPARE, window: { start: {}, end: '2026-11-01' } } },
+    { name: 'invalid coverage boolean', payload: { ...NBA_COMPARE, covers_requested_window: {} } },
+    { name: 'missing stage counts', payload: { ...NBA_COMPARE, summary: { ...COMPARE.summary, would_stage: undefined } } },
+    { name: 'object stage count', payload: { ...NBA_COMPARE, summary: { ...COMPARE.summary, would_stage: { live: {}, preview: 0 } } } },
+    { name: 'invalid summary number', payload: { ...NBA_COMPARE, summary: { ...COMPARE.summary, rows_changed: null } } },
+    { name: 'object delta metric', payload: { ...NBA_COMPARE, summary: { ...COMPARE.summary, mean_abs_delta_per_stat: { points: {} } } } },
+    { name: 'missing changes array', payload: { ...NBA_COMPARE, staged_selection_changes: undefined } },
+    { name: 'object player name', payload: { ...NBA_COMPARE, rows: [{ ...COMPARE_ROW, player_name: {} }] } },
+    { name: 'object team', payload: { ...NBA_COMPARE, rows: [{ ...COMPARE_ROW, team: {} }] } },
+    { name: 'string numeric projection', payload: { ...NBA_COMPARE, rows: [{ ...COMPARE_ROW, preview_projection: '21' }] } },
+    { name: 'missing delta', payload: { ...NBA_COMPARE, rows: [{ ...COMPARE_ROW, delta: undefined }] } },
+    { name: 'object selection name', payload: { ...NBA_COMPARE, staged_selection_changes: [{ ...COMPARE_CHANGE, player_name: {} }] } },
+    { name: 'invalid direction change', payload: { ...NBA_COMPARE, staged_selection_changes: [{ ...COMPARE_CHANGE, direction_change: { from: {}, to: 'over' } }] } },
+    { name: 'invalid readiness boolean', payload: { ...NBA_COMPARE, ready_for_review: 'false' } },
+    { name: 'unknown comparison status', payload: { ...NBA_COMPARE, status: 'unexpected' } },
+    { name: 'wrong response configuration', payload: { ...NBA_COMPARE, config_id: 'another-config' } },
+  ])('rejects malformed GET comparison with $name before it can render', async ({ payload }) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    })))
+    const onCompare = vi.fn()
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={NBA_COMPARE} error={null} schedule={null} onCompare={onCompare} onError={noop} />)
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Comparison unavailable')
+    expect(onCompare).toHaveBeenCalledTimes(1)
+    expect(onCompare).toHaveBeenLastCalledWith(null)
+    expect(screen.queryByText(/^WINDOW /)).toBeNull()
+  })
+
+  it('accepts and renders a complete zero-row comparison response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(NBA_COMPARE), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    })))
+    const onCompare = vi.fn()
+    const props = { league: 'NBA', config: { ...PREVIEW_CONFIG, league: 'NBA' },
+      error: null, schedule: null, onCompare, onError: noop }
+    const { rerender } = render(<ComparePanel {...props} compare={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    await waitFor(() => expect(onCompare).toHaveBeenLastCalledWith(NBA_COMPARE))
+    rerender(<ComparePanel {...props} compare={NBA_COMPARE} />)
+    expect(screen.getByText('0 / 0')).toBeTruthy()
+    expect(screen.getByText('WOULD STAGE (LIVE)')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('accepts finite and nullable row metrics with a valid direction-change object', async () => {
+    const comparison: CompareResponse = { ...NBA_COMPARE, rows: [COMPARE_ROW],
+      staged_selection_changes: [{ ...COMPARE_CHANGE, direction_change: { from: 'under', to: 'over' } }],
+      summary: { ...COMPARE.summary, rows_compared: 1, rows_changed: 1, staged_selections_affected: 1 },
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(comparison), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    })))
+    const onCompare = vi.fn()
+    const props = { league: 'NBA', config: { ...PREVIEW_CONFIG, league: 'NBA' },
+      error: null, schedule: null, onCompare, onError: noop }
+    const { rerender } = render(<ComparePanel {...props} compare={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    await waitFor(() => expect(onCompare).toHaveBeenLastCalledWith(comparison))
+    rerender(<ComparePanel {...props} compare={comparison} />)
+    expect(screen.getByText('Fixture Player')).toBeTruthy()
+    expect(screen.getByText(/under → over/)).toBeTruthy()
+    expect(screen.getByText('21')).toBeTruthy()
+  })
+
+  it('accepts a successful no-game preview with empty dates and a null window', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(runResponse({
+      dates_previewed: [], window: null,
+    })), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+    const onError = vi.fn()
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={null} error={null} schedule={null} onCompare={noop} onError={onError} />)
+    fireEvent.click(screen.getByRole('button', { name: 'RUN PREVIEW' }))
+    expect(await screen.findByText('PREVIEWED NOTHING')).toBeTruthy()
+    expect(onError).toHaveBeenLastCalledWith(expect.stringContaining('projected nothing'))
+    expect((screen.getByRole('button', { name: 'COMPARE' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('still accepts a successful complete comparison after a fresh preview repairs readiness', async () => {
+    const comparison = { ...COMPARE, league: 'NBA' }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: false, status: 409,
         json: async () => ({ detail: 'Latest snapshot capture failed.' }) })
       .mockResolvedValueOnce({ ok: true, status: 200,
-        json: async () => ({ status: 'success', publishing_blocked: false, ready_for_review: true,
+        json: async () => runResponse({ status: 'success', publishing_blocked: false, ready_for_review: true,
           reason: null, dates_previewed: ['2026-11-01'],
           window: { start: '2026-11-01', end: '2026-11-01' } }) })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => COMPARE })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => comparison })
     vi.stubGlobal('fetch', fetchMock)
     const onCompare = vi.fn()
     render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
@@ -538,12 +643,12 @@ describe('preview window', () => {
     await screen.findByText('PREVIEWED 2026-11-01')
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
-    await waitFor(() => expect(onCompare).toHaveBeenLastCalledWith(COMPARE))
+    await waitFor(() => expect(onCompare).toHaveBeenLastCalledWith(comparison))
   })
 
   it('keeps partial projector output blocked even when capture completed', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200,
-      json: async () => ({ status: 'partial', publishing_blocked: true,
+      json: async () => runResponse({ status: 'partial', publishing_blocked: true,
         ready_for_review: false, reason: 'projection_run_incomplete',
         dates_previewed: ['2026-11-01'],
         window: { start: '2026-11-01', end: '2026-11-01' },
@@ -559,14 +664,18 @@ describe('preview window', () => {
     expect((screen.getByRole('button', { name: 'COMPARE' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it.each(['null', 'not valid JSON', '{"status":"success","dates_previewed":"2026-11-01"}'])(
+  it.each(['null', 'not valid JSON', '{"status":"success","dates_previewed":"2026-11-01"}',
+    JSON.stringify(runResponse({ status: 'unexpected' })),
+    JSON.stringify({ ...runResponse(), requested_window: {} }),
+    JSON.stringify({ ...runResponse(), ready_for_review: 'true' }),
+    JSON.stringify(runResponse({ config_id: 'another-config' })),
+  ])(
     'fails closed for malformed HTTP 200 run response %s without retaining prior success', async (invalidBody) => {
       const response = (body: string) => new Response(body, {
         status: 200, headers: { 'Content-Type': 'application/json' },
       })
       const fetchMock = vi.fn()
-        .mockResolvedValueOnce(response(JSON.stringify({ status: 'success',
-          dates_previewed: ['2026-11-01'], window: { start: '2026-11-01', end: '2026-11-01' } })))
+        .mockResolvedValueOnce(response(JSON.stringify(runResponse())))
         .mockResolvedValueOnce(response(invalidBody))
       vi.stubGlobal('fetch', fetchMock)
       const onCompare = vi.fn()

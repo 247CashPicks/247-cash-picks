@@ -11,6 +11,7 @@ import { ReboundContextBadge } from './CareerReboundingPanel'
 import { DefensiveImpactBadge } from './DefensiveImpactPanel'
 import { WagerCautionBadge } from './WagerConcentrationPanel'
 import { NationalTvBadge } from './NationalTvPanel'
+import { isCompareResponse, isPreviewRunResponse } from '@/lib/operator/preview-response'
 import { easternToday } from '@/lib/time/eastern'
 
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' }
@@ -505,24 +506,19 @@ export function ComparePanel({ league, config, compare, error, schedule,
         const message = 'Comparison is blocked: the latest preview is incomplete or not ready for review.'
         setComparisonFailure(message); onError(message); return
       }
-      if (!body.window || !Array.isArray(body.dates_previewed)
-          || !Array.isArray(body.rows) || !body.summary) {
+      if (!isCompareResponse(body) || body.league !== league || body.config_id !== config!.id) {
         const message = 'Comparison unavailable: the server did not return a ready preview comparison.'
         setComparisonFailure(message); onError(message); return
       }
       setComparisonFailure(null)
-      onCompare(body as CompareResponse); return
+      onCompare(body); return
     }
 
-    if (!body || typeof body !== 'object' || Array.isArray(body)
-        || typeof body.status !== 'string' || !Array.isArray(body.dates_previewed)
-        || !body.dates_previewed.every((day: unknown) => typeof day === 'string')
-        || (body.window !== null && (typeof body.window?.start !== 'string'
-          || typeof body.window?.end !== 'string'))) {
+    if (!isPreviewRunResponse(body) || body.league !== league || body.config_id !== config!.id) {
       const message = 'The preview response was invalid. No new preview is ready for review; Compare is blocked.'
       setRan(null); setComparisonFailure(message); onError(message); return
     }
-    const run = body as PreviewRunResponse
+    const run = body
     setRan(run)
     onCompare(null)
     if (readinessBlocked(run)) {
