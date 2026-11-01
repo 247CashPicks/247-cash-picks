@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type {
   CompareResponse, Indicator, IndicatorConfig, IndicatorsResponse, OperatorMe,
 } from '@/lib/operator/client'
@@ -460,6 +460,103 @@ describe('preview window', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(onCompare).toHaveBeenCalledWith(null)
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('Compare is blocked'))
+  })
+
+  it.each([false, true])('clears stale comparison and green success on GET readiness rejection (prior run: %s)', async (priorRun) => {
+    const fetchMock = vi.fn()
+    if (priorRun) fetchMock.mockResolvedValueOnce({ ok: true, status: 200,
+      json: async () => ({ status: 'success', dates_previewed: ['2026-11-01'],
+        window: { start: '2026-11-01', end: '2026-11-01' } }),
+    })
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 409,
+      json: async () => ({ detail: { error: 'Latest preview snapshot is incomplete; run a new preview.' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const onCompare = vi.fn()
+    const onError = vi.fn()
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={COMPARE} error={null} schedule={null} onCompare={onCompare} onError={onError} />)
+    if (priorRun) {
+      fireEvent.click(screen.getByText('RUN PREVIEW'))
+      await screen.findByText('PREVIEWED 2026-11-01')
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Latest preview snapshot is incomplete; run a new preview.')
+    expect(screen.queryByText(/^PREVIEWED/)).toBeNull()
+    expect(screen.queryByText(/^WINDOW /)).toBeNull()
+    expect(onCompare).toHaveBeenLastCalledWith(null)
+    expect(onError).toHaveBeenLastCalledWith('Latest preview snapshot is incomplete; run a new preview.')
+    expect((screen.getByRole('button', { name: 'COMPARE' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it.each([
+    { status: 'partial' }, { publishing_blocked: true }, { ready_for_review: false },
+  ])('does not accept an explicitly blocked HTTP 200 comparison: %j', async (readiness) => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200,
+      json: async () => ({ ...COMPARE, ...readiness }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const onCompare = vi.fn()
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={COMPARE} error={null} schedule={null} onCompare={onCompare} onError={noop} />)
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('Comparison is blocked')
+    expect(onCompare).toHaveBeenCalledTimes(1)
+    expect(onCompare).toHaveBeenCalledWith(null)
+    expect(screen.queryByText(/^WINDOW /)).toBeNull()
+  })
+
+  it('fails closed when comparison readiness cannot be fetched', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Synthetic offline response')))
+    const onCompare = vi.fn()
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={COMPARE} error={null} schedule={null} onCompare={onCompare} onError={noop} />)
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('readiness could not be verified')
+    expect(onCompare).toHaveBeenLastCalledWith(null)
+    expect(screen.queryByText(/^WINDOW /)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'COMPARING…' })).toBeNull()
+  })
+
+  it('still accepts a successful complete comparison after a fresh preview repairs readiness', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 409,
+        json: async () => ({ detail: 'Latest snapshot capture failed.' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200,
+        json: async () => ({ status: 'success', publishing_blocked: false, ready_for_review: true,
+          reason: null, dates_previewed: ['2026-11-01'],
+          window: { start: '2026-11-01', end: '2026-11-01' } }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => COMPARE })
+    vi.stubGlobal('fetch', fetchMock)
+    const onCompare = vi.fn()
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={null} error={null} schedule={null} onCompare={onCompare} onError={noop} />)
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    await screen.findByRole('alert')
+    fireEvent.click(screen.getByRole('button', { name: 'RUN PREVIEW' }))
+    await screen.findByText('PREVIEWED 2026-11-01')
+    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'COMPARE' }))
+    await waitFor(() => expect(onCompare).toHaveBeenLastCalledWith(COMPARE))
+  })
+
+  it('keeps partial projector output blocked even when capture completed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200,
+      json: async () => ({ status: 'partial', publishing_blocked: true,
+        ready_for_review: false, reason: 'projection_run_incomplete',
+        dates_previewed: ['2026-11-01'],
+        window: { start: '2026-11-01', end: '2026-11-01' },
+        results: [{ status: 'partial', records: 5, errors: ['Synthetic projection failure'],
+          pregame_snapshot: { status: 'complete' } }],
+      }),
+    }))
+    render(<ComparePanel league="NBA" config={{ ...PREVIEW_CONFIG, league: 'NBA' }}
+      compare={null} error={null} schedule={null} onCompare={noop} onError={noop} />)
+    fireEvent.click(screen.getByText('RUN PREVIEW'))
+    expect((await screen.findByRole('alert')).textContent).toContain('REVIEW BLOCKED')
+    expect(screen.queryByText(/^PREVIEWED/)).toBeNull()
+    expect((screen.getByRole('button', { name: 'COMPARE' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('warns when the preview covered less than was requested', () => {

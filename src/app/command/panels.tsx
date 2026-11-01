@@ -398,6 +398,15 @@ export function ConfigsPanel({ league, configs, selected, onSelect, onChanged }:
 
 // ── 3. Preview → Compare ────────────────────────────────────────────────────
 
+function readinessBlocked(value: {
+  status?: unknown; publishing_blocked?: unknown
+  ready_for_review?: unknown; reason?: unknown
+}) {
+  return ['partial', 'error', 'failed'].includes(String(value.status))
+    || value.publishing_blocked === true || value.ready_for_review === false
+    || value.reason === 'pregame_snapshot_incomplete'
+}
+
 export function ComparePanel({ league, config, compare, error, schedule,
                               onCompare, onError }: {
   league: string
@@ -421,11 +430,11 @@ export function ComparePanel({ league, config, compare, error, schedule,
   const [season, setSeason] = useState(schedule?.season != null ? String(schedule.season) : '')
   const [ran, setRan] = useState<PreviewRunResponse | null>(null)
   const [busy, setBusy] = useState<'run' | 'compare' | null>(null)
-  const runBlocked = ran !== null && (ran.status === 'partial'
-    || ran.publishing_blocked === true || ran.ready_for_review === false
-    || ran.reason === 'pregame_snapshot_incomplete')
+  const [comparisonFailure, setComparisonFailure] = useState<string | null>(null)
+  const runBlocked = ran !== null && readinessBlocked(ran)
   const captureFailed = ran?.reason === 'pregame_snapshot_incomplete'
-  const compareBlocked = runBlocked || (ran !== null && !ran.dates_previewed?.length)
+  const compareBlocked = runBlocked || comparisonFailure !== null
+    || (ran !== null && !ran.dates_previewed?.length)
 
   if (!config) {
     return <p style={{ padding: 'var(--pad)', margin: 0, fontSize: '13px',
@@ -459,15 +468,26 @@ export function ComparePanel({ league, config, compare, error, schedule,
   async function call(kind: 'run' | 'compare') {
     if (kind === 'compare' && compareBlocked) return
     setBusy(kind); onError(null)
-    if (kind === 'run') { setRan(null); onCompare(null) }
+    onCompare(null)
+    if (kind === 'run') { setRan(null); setComparisonFailure(null) }
     const w = compareWindow()
     const url = kind === 'run'
       ? `/api/operator/indicator-configs/${config!.id}/preview-run`
       : `/api/operator/indicator-configs/${config!.id}/compare?start_date=${w.start}&end_date=${w.end}`
-    const res = await fetch(url, kind === 'run'
-      ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(runBody()) }
-      : { cache: 'no-store' })
+    let res: Response
+    try {
+      res = await fetch(url, kind === 'run'
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(runBody()) }
+        : { cache: 'no-store' })
+    } catch {
+      const message = kind === 'compare'
+        ? 'Comparison readiness could not be verified. No comparison is ready for review.'
+        : 'The preview request failed. No new preview is ready for review.'
+      setBusy(null)
+      if (kind === 'compare') setComparisonFailure(message)
+      onError(message); return
+    }
     const body = await res.json().catch(() => null)
     setBusy(null)
     if (!res.ok) {
@@ -475,15 +495,29 @@ export function ComparePanel({ league, config, compare, error, schedule,
       // message, never as an empty table.
       onError(typeof body?.detail === 'string' ? body.detail
               : body?.detail?.error ?? `Failed (${res.status})`)
+      if (kind === 'compare') setComparisonFailure(
+        typeof body?.detail === 'string' ? body.detail
+          : body?.detail?.error ?? `Comparison unavailable (${res.status}).`)
       return
     }
-    if (kind === 'compare') { onCompare(body as CompareResponse); return }
+    if (kind === 'compare') {
+      if (!body || readinessBlocked(body)) {
+        const message = 'Comparison is blocked: the latest preview is incomplete or not ready for review.'
+        setComparisonFailure(message); onError(message); return
+      }
+      if (!body.window || !Array.isArray(body.dates_previewed)
+          || !Array.isArray(body.rows) || !body.summary) {
+        const message = 'Comparison unavailable: the server did not return a ready preview comparison.'
+        setComparisonFailure(message); onError(message); return
+      }
+      setComparisonFailure(null)
+      onCompare(body as CompareResponse); return
+    }
 
     const run = body as PreviewRunResponse
     setRan(run)
     onCompare(null)
-    if (run.status === 'partial' || run.publishing_blocked === true
-        || run.ready_for_review === false || run.reason === 'pregame_snapshot_incomplete') {
+    if (readinessBlocked(run)) {
       onError(run.reason === 'pregame_snapshot_incomplete'
         ? 'Pregame snapshot capture failed. The preview is incomplete and Compare is blocked.'
         : 'The preview is incomplete or not ready for review. Compare is blocked.')
@@ -550,7 +584,7 @@ export function ComparePanel({ league, config, compare, error, schedule,
             : ' No dates are ready for review.'}
         </p>
       )}
-      {ran && !runBlocked && (
+      {ran && !runBlocked && comparisonFailure === null && busy === null && (
         <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
                     color: ran.dates_previewed?.length ? 'var(--lime)'
                                                        : 'var(--amber)' }}>
@@ -562,8 +596,10 @@ export function ComparePanel({ league, config, compare, error, schedule,
 
       {error && <p role="alert" style={{ fontSize: '12px', color: 'var(--alert)' }}>
         {error}</p>}
+      {comparisonFailure && !error && <p role="alert"
+        style={{ fontSize: '12px', color: 'var(--alert)' }}>{comparisonFailure}</p>}
 
-      {compare && !compareBlocked && (
+      {compare && !compareBlocked && busy === null && (
         <>
           <p style={{ ...mono, fontSize: '11px', margin: '0 0 8px',
                       color: 'var(--steel)' }}>
